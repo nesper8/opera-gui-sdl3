@@ -57,9 +57,8 @@ requires restarting the app.
 ## Build
 
 Requirements: Windows 10 or later, CMake 3.24+, Git, and a C++20 compiler
-(Visual Studio 2022 or newer). CMake downloads SDL3 and Dear ImGui at configure
-time. On Windows, run these commands from a Visual Studio Developer PowerShell
-so the compiler environment is available to Ninja.
+(MSVC). CMake downloads SDL3 and Dear ImGui at configure time. The release
+workflow uses Ninja with the x64 MSVC environment.
 
 ```powershell
 cmake -S . -B build -G Ninja

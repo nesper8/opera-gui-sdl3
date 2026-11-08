@@ -33,16 +33,49 @@ jobs:
           RELEASE_TAG: ${{ env.RELEASE_TAG }}
         with:
           script: |
-            if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(process.env.RELEASE_TAG)) {
+            const tagName = process.env.RELEASE_TAG;
+            if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(tagName)) {
               throw new Error("Version must use semantic version format, such as 0.1.1 or 0.1.1-rc.1.");
             }
 
-            await github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: `refs/tags/${process.env.RELEASE_TAG}`,
-              sha: context.sha
-            });
+            async function verifyExistingTag() {
+              const { data: ref } = await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${tagName}`
+              });
+              let target = ref.object;
+              while (target.type === "tag") {
+                const { data: annotatedTag } = await github.rest.git.getTag({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag_sha: target.sha
+                });
+                target = annotatedTag.object;
+              }
+              if (target.type !== "commit" || target.sha !== context.sha) {
+                throw new Error(`Tag ${tagName} already exists and does not point to this workflow's commit.`);
+              }
+            }
+
+            try {
+              await verifyExistingTag();
+              core.info(`Tag ${tagName} already points to this commit; continuing with the release.`);
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              try {
+                await github.rest.git.createRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `refs/tags/${tagName}`,
+                  sha: context.sha
+                });
+              } catch (createError) {
+                if (createError.status !== 422) throw createError;
+                await verifyExistingTag();
+                core.info(`Tag ${tagName} was created by another workflow run; continuing with the release.`);
+              }
+            }
 
       - name: Set up MSVC environment
         uses: ilammy/msvc-dev-cmd@v1

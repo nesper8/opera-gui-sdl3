@@ -34,8 +34,8 @@ not launch RetroArch.
   preference and takes effect after restarting the frontend.
 - Exposes the Opera core's 640x480 high-resolution framebuffer option in Video
   settings when supported by the loaded core.
-- Uses SDL audio with WASAPI selected by default, a system-default audio
-  backend option, selectable output device, configurable audio latency, and
+- Uses SDL audio with the SDL default backend selected by default, optional
+  WASAPI selection, selectable output device, configurable audio latency, and
   adjustable output gain. Playback stays at the core's native rate, and gain
   is capped at unity to avoid frontend-induced clipping. Audio latency is a
   requested SDL buffer size; the audio backend may choose a different effective value.

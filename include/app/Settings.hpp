@@ -19,7 +19,7 @@ struct Settings final {
     bool fullscreen = false;
     bool showFpsCounter = false;
     bool useDetectedBios = true;
-    std::string audioDriver = "wasapi";
+    std::string audioDriver = "default";
     std::string audioDevice;
     int audioLatencyMs = 80;
     float audioGain = 1.0F;

@@ -21,7 +21,7 @@ void testDefaultsAndRoundTrip() {
     try {
         app::Settings settings = app::Settings::defaults();
         require(settings.videoDriver == "opengl", "OpenGL must be the default video driver.");
-        require(settings.audioDriver == "wasapi", "WASAPI must be the default audio driver.");
+        require(settings.audioDriver == "default", "SDL default must be the default audio driver.");
         require(!settings.keyboardBindings[0][0].empty(), "Default keyboard bindings must be populated.");
         require(settings.gamepadBindings[0][0] == std::vector<int>{1} &&
                     settings.gamepadBindings[0][1] == std::vector<int>{0} &&

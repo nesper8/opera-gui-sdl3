@@ -10,6 +10,9 @@
 namespace app {
 namespace {
 
+constexpr int StickAxisBindingBase = -100;
+constexpr Sint16 StickAxisThreshold = 16000;
+
 } // namespace
 
 InputManager::InputManager(Settings& settings) : m_settings(settings) {}
@@ -84,12 +87,17 @@ void InputManager::setGamepadButtonBinding(const std::size_t player, const std::
 }
 
 void InputManager::setGamepadAxisBinding(const std::size_t player, const std::size_t button,
-                                         const SDL_GamepadAxis axis) {
+                                         const SDL_GamepadAxis axis, const bool negativeDirection) {
     if (player >= m_settings.gamepadBindings.size() || button >= PadButtonCount ||
-        axis < SDL_GAMEPAD_AXIS_LEFT_TRIGGER || axis > SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {
-        throw std::out_of_range("Only gamepad trigger axes can be bound to digital buttons.");
+        axis < SDL_GAMEPAD_AXIS_LEFTX || axis > SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {
+        throw std::out_of_range("Gamepad axis binding is outside the supported range.");
     }
-    m_settings.gamepadBindings[player][button] = -static_cast<int>(axis) - 2;
+    if (axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER || axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {
+        m_settings.gamepadBindings[player][button] = -static_cast<int>(axis) - 2;
+    } else {
+        m_settings.gamepadBindings[player][button] =
+            StickAxisBindingBase - static_cast<int>(axis) * 2 - (negativeDirection ? 1 : 0);
+    }
 }
 
 SDL_JoystickID InputManager::selectedGamepadId(const std::size_t player) const noexcept {
@@ -135,6 +143,17 @@ std::string InputManager::gamepadBindingName(const std::size_t player, const std
         }
     }
     if (binding <= -2) {
+        if (binding <= StickAxisBindingBase) {
+            if (binding < StickAxisBindingBase - 7) return "Unbound";
+            const int encodedAxis = StickAxisBindingBase - binding;
+            const int axis = encodedAxis / 2;
+            const bool negativeDirection = encodedAxis % 2 != 0;
+            if (axis == SDL_GAMEPAD_AXIS_LEFTX) return negativeDirection ? "Left Stick Left" : "Left Stick Right";
+            if (axis == SDL_GAMEPAD_AXIS_LEFTY) return negativeDirection ? "Left Stick Up" : "Left Stick Down";
+            if (axis == SDL_GAMEPAD_AXIS_RIGHTX) return negativeDirection ? "Right Stick Left" : "Right Stick Right";
+            if (axis == SDL_GAMEPAD_AXIS_RIGHTY) return negativeDirection ? "Right Stick Up" : "Right Stick Down";
+            return "Unbound";
+        }
         const int axis = -binding - 2;
         if (axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER) return "Left Trigger";
         if (axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) return "Right Trigger";
@@ -152,6 +171,14 @@ std::int16_t InputManager::buttonState(const unsigned player, const unsigned but
             return SDL_GetGamepadButton(gamepad, static_cast<SDL_GamepadButton>(binding)) ? 1 : 0;
         }
         if (binding <= -2) {
+            if (binding <= StickAxisBindingBase) {
+                if (binding < StickAxisBindingBase - 7) return 0;
+                const int encodedAxis = StickAxisBindingBase - binding;
+                const int axis = encodedAxis / 2;
+                if (axis < SDL_GAMEPAD_AXIS_LEFTX || axis > SDL_GAMEPAD_AXIS_RIGHTY) return 0;
+                const Sint16 value = SDL_GetGamepadAxis(gamepad, static_cast<SDL_GamepadAxis>(axis));
+                return (encodedAxis % 2 != 0 ? value < -StickAxisThreshold : value > StickAxisThreshold) ? 1 : 0;
+            }
             const int axis = -binding - 2;
             if (axis >= SDL_GAMEPAD_AXIS_LEFT_TRIGGER && axis <= SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {
                 return SDL_GetGamepadAxis(gamepad, static_cast<SDL_GamepadAxis>(axis)) > 16000 ? 1 : 0;

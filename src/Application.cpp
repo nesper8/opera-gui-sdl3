@@ -270,14 +270,13 @@ void Application::handleEvent(const SDL_Event& event) {
     } else if (m_captureBinding && m_captureBinding->gamepad &&
                event.type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
                event.gaxis.which == m_input->selectedGamepadId(m_captureBinding->player) &&
-               event.gaxis.value > 16000 &&
-               (event.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER ||
-                event.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)) {
+               (event.gaxis.value > 16000 || event.gaxis.value < -16000)) {
         m_input->setGamepadAxisBinding(m_captureBinding->player, m_captureBinding->button,
-                                       static_cast<SDL_GamepadAxis>(event.gaxis.axis));
+                                       static_cast<SDL_GamepadAxis>(event.gaxis.axis),
+                                       event.gaxis.value < 0);
         m_captureBinding.reset();
         saveSettings();
-        m_status = "Gamepad trigger binding updated.";
+        m_status = "Gamepad axis binding updated.";
     }
     if (event.type == SDL_EVENT_QUIT) {
         m_running = false;
@@ -437,7 +436,7 @@ void Application::drawInputSettings() {
     }
 
     ImGui::SeparatorText("3DO controls");
-    ImGui::TextUnformatted("Click a binding, then press a key or controller button. Esc cancels.");
+    ImGui::TextUnformatted("Click a binding, then press a key/button or move a stick. Esc cancels.");
     if (ImGui::BeginTable("controller-bindings", 3,
                           ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg |
                           ImGuiTableFlags_SizingStretchProp)) {
@@ -469,7 +468,7 @@ void Application::drawInputSettings() {
                 m_captureBinding->player == m_selectedPlayer && m_captureBinding->button == button;
             const std::string bindingName = m_input->gamepadBindingName(m_selectedPlayer, button);
             ImGui::BeginDisabled(gamepadId == 0);
-            if (ImGui::Button(capturingGamepad ? "Press button..." : bindingName.c_str(),
+            if (ImGui::Button(capturingGamepad ? "Press button or move stick..." : bindingName.c_str(),
                               ImVec2(-1, 0))) {
                 m_captureBinding = BindingCapture{m_selectedPlayer, button, true};
             }

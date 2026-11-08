@@ -40,6 +40,7 @@ void testDefaultsAndRoundTrip() {
         settings.keyboardBindings[1][app::PadButtonCount - 1] = 77;
         settings.gamepadBindings[1][1] = 2;
         settings.gamepadBindings[1][12] = -6;
+        settings.gamepadBindings[1][4] = -101;
         settings.coreOptions["opera_region"] = "NTSC";
         settings.save(file);
 
@@ -58,6 +59,7 @@ void testDefaultsAndRoundTrip() {
         require(loaded.keyboardBindings[1][app::PadButtonCount - 1] == 77, "Keyboard mapping did not persist.");
         require(loaded.gamepadBindings[1][1] == 2, "Gamepad button mapping did not persist.");
         require(loaded.gamepadBindings[1][12] == -6, "Gamepad trigger mapping did not persist.");
+        require(loaded.gamepadBindings[1][4] == -101, "Directional stick mapping did not persist.");
         require(loaded.coreOptions.at("opera_region") == "NTSC", "Core option did not persist.");
 
         {

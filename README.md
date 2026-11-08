@@ -16,7 +16,9 @@ not launch RetroArch.
   temporarily unavailable.
 - Routes the two emulated joypads independently to an SDL gamepad (including
   XInput controllers) or remappable keyboard controls. Bindings are captured
-  from connected controllers or the keyboard and displayed in 3DO order:
+  from connected controllers or the keyboard; analog stick directions can be
+  bound independently to digital controls such as the D-pad. Bindings are
+  displayed in 3DO order:
   D-pad, A/B/C, L/R, Select, and Start. Identical gamepads are distinguished
   by their enumeration order.
 - Automatically hides the settings window after a game loads; close or hide it

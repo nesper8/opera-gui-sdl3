@@ -408,14 +408,36 @@ void Application::drawInputSettings() {
     }
 
     std::string selected = m_settings.gamepadGuids[m_selectedPlayer];
+    const auto devices = m_input->gamepads();
+    const auto gamepadLabel = [&devices](const std::size_t deviceIndex) {
+        const auto& device = devices[deviceIndex];
+        std::size_t matchingCount = 0;
+        std::size_t matchingIndex = 0;
+        for (std::size_t index = 0; index < devices.size(); ++index) {
+            if (devices[index].name != device.name) continue;
+            if (index < deviceIndex) ++matchingIndex;
+            ++matchingCount;
+        }
+        return matchingCount > 1
+            ? device.name + " (" + std::to_string(matchingIndex + 1) + ")"
+            : device.name;
+    };
+    std::string selectedLabel = selected.empty() ? "Keyboard" : "Disconnected controller";
+    for (std::size_t index = 0; index < devices.size(); ++index) {
+        if (devices[index].key == selected) {
+            selectedLabel = gamepadLabel(index);
+            break;
+        }
+    }
     bool changed = false;
-    if (ImGui::BeginCombo("Device", selected.empty() ? "Keyboard" : selected.c_str())) {
+    if (ImGui::BeginCombo("Device", selectedLabel.c_str())) {
         if (ImGui::Selectable("Keyboard", selected.empty())) {
             selected.clear();
             changed = true;
         }
-        for (const auto& device : m_input->gamepads()) {
-            const std::string label = device.name + " (" + device.key + ")";
+        for (std::size_t index = 0; index < devices.size(); ++index) {
+            const auto& device = devices[index];
+            const std::string label = gamepadLabel(index);
             const bool active = selected == device.key;
             if (ImGui::Selectable(label.c_str(), active)) {
                 selected = device.key;
@@ -467,7 +489,9 @@ void Application::drawInputSettings() {
                 const float horizontalPadding = ImGui::GetStyle().FramePadding.x * 2.0F;
                 float lineWidth = 0.0F;
                 bool hasButtonOnLine = false;
+                bool removedBinding = false;
 
+                ImGui::PushID(gamepad ? "gamepad" : "keyboard");
                 ImGui::BeginDisabled(disabled);
                 const std::size_t visibleBindingCount = std::max<std::size_t>(bindings.size(), 1);
                 for (std::size_t index = 0; index < visibleBindingCount; ++index) {
@@ -510,7 +534,8 @@ void Application::drawInputSettings() {
                         m_captureBinding.reset();
                         saveSettings();
                         m_status = "Input binding removed.";
-                        return;
+                        removedBinding = true;
+                        break;
                     }
                     if (rightClicked) {
                         m_captureBinding = BindingCapture{m_selectedPlayer, button, gamepad,
@@ -533,6 +558,8 @@ void Application::drawInputSettings() {
                     ImGui::EndDisabled();
                 }
                 ImGui::EndDisabled();
+                ImGui::PopID();
+                if (removedBinding) return;
             };
 
             ImGui::TableSetColumnIndex(1);

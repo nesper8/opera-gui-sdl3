@@ -42,7 +42,8 @@ not launch RetroArch.
   requested SDL buffer size; the audio backend may choose a different effective value.
 - Detects supported 3DO BIOS filenames in the application's `bios` directory
   and uses that directory as the core system directory when enabled. Detection
-  is optional; when no BIOS is found, the existing user system directory is used.
+  is optional; the frontend launches without proprietary BIOS files and uses
+  the existing user system directory automatically when no BIOS is found.
 - Persists settings under the current user's SDL preferences directory and
   records diagnostics in `opera-frontend.log`.
 

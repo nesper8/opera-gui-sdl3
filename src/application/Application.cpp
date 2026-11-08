@@ -47,15 +47,33 @@ std::optional<std::filesystem::path> detectOperaBios(const std::filesystem::path
         "sanyotry.bin",
         "3do_arcade_saot.bin"
     };
-    for (const char* filename : biosFiles) {
-        const auto candidate = directory / filename;
-        std::error_code error;
-        const bool isFile = std::filesystem::is_regular_file(candidate, error);
-        if (error) {
-            throw std::filesystem::filesystem_error("Unable to inspect Opera BIOS file",
-                                                    candidate, error);
+    std::array<bool, biosFiles.size()> detected{};
+    std::error_code error;
+    std::filesystem::directory_iterator entry(directory, error);
+    if (error) {
+        throw std::filesystem::filesystem_error("Unable to inspect Opera BIOS directory",
+                                                directory, error);
+    }
+    const std::filesystem::directory_iterator end;
+    while (entry != end) {
+        const auto filename = entry->path().filename();
+        for (std::size_t index = 0; index < biosFiles.size(); ++index) {
+            if (filename != biosFiles[index]) continue;
+            const bool isFile = entry->is_regular_file(error);
+            if (error) {
+                throw std::filesystem::filesystem_error("Unable to inspect Opera BIOS file",
+                                                        entry->path(), error);
+            }
+            detected[index] = isFile;
         }
-        if (isFile) return candidate;
+        entry.increment(error);
+        if (error) {
+            throw std::filesystem::filesystem_error("Unable to inspect Opera BIOS directory",
+                                                    directory, error);
+        }
+    }
+    for (std::size_t index = 0; index < biosFiles.size(); ++index) {
+        if (detected[index]) return directory / biosFiles[index];
     }
     return std::nullopt;
 }

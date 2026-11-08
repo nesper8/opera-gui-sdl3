@@ -255,7 +255,7 @@ void Application::handleEvent(const SDL_Event& event) {
     } else if (m_captureBinding && !m_captureBinding->gamepad &&
                event.type == SDL_EVENT_KEY_DOWN) {
         m_input->setKeyboardBinding(m_captureBinding->player, m_captureBinding->button,
-                                    event.key.scancode);
+                                    event.key.scancode, m_captureBinding->bindingIndex);
         m_captureBinding.reset();
         saveSettings();
         m_status = "Keyboard binding updated.";
@@ -263,7 +263,7 @@ void Application::handleEvent(const SDL_Event& event) {
                event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN &&
                event.gbutton.which == m_input->selectedGamepadId(m_captureBinding->player)) {
         m_input->setGamepadButtonBinding(m_captureBinding->player, m_captureBinding->button,
-            static_cast<SDL_GamepadButton>(event.gbutton.button));
+                   static_cast<SDL_GamepadButton>(event.gbutton.button), m_captureBinding->bindingIndex);
         m_captureBinding.reset();
         saveSettings();
         m_status = "Gamepad binding updated.";
@@ -273,7 +273,7 @@ void Application::handleEvent(const SDL_Event& event) {
                (event.gaxis.value > 16000 || event.gaxis.value < -16000)) {
         m_input->setGamepadAxisBinding(m_captureBinding->player, m_captureBinding->button,
                                        static_cast<SDL_GamepadAxis>(event.gaxis.axis),
-                                       event.gaxis.value < 0);
+                                       event.gaxis.value < 0, m_captureBinding->bindingIndex);
         m_captureBinding.reset();
         saveSettings();
         m_status = "Gamepad axis binding updated.";
@@ -436,7 +436,8 @@ void Application::drawInputSettings() {
     }
 
     ImGui::SeparatorText("3DO controls");
-    ImGui::TextUnformatted("Click a binding, then press a key/button or move a stick. Esc cancels.");
+    ImGui::TextWrapped("Left-click a binding to replace it; right-click to add another input; "
+                       "middle-click to remove that input. Press a key/button or move a stick; Esc cancels.");
     if (ImGui::BeginTable("controller-bindings", 3,
                           ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg |
                           ImGuiTableFlags_SizingStretchProp)) {
@@ -452,27 +453,93 @@ void Application::drawInputSettings() {
             ImGui::TableSetColumnIndex(0);
             ImGui::TextUnformatted(control.name);
 
+            const auto drawBindingList = [&](const bool gamepad) {
+                const auto& bindings = gamepad
+                    ? m_settings.gamepadBindings[m_selectedPlayer][button]
+                    : m_settings.keyboardBindings[m_selectedPlayer][button];
+                const bool disabled = gamepad && m_input->selectedGamepadId(m_selectedPlayer) == 0;
+                const bool captureForThisField = m_captureBinding &&
+                    m_captureBinding->player == m_selectedPlayer &&
+                    m_captureBinding->button == button &&
+                    m_captureBinding->gamepad == gamepad;
+                const float cellWidth = ImGui::GetContentRegionAvail().x;
+                const float spacing = ImGui::GetStyle().ItemSpacing.x;
+                const float horizontalPadding = ImGui::GetStyle().FramePadding.x * 2.0F;
+                float lineWidth = 0.0F;
+                bool hasButtonOnLine = false;
+
+                ImGui::BeginDisabled(disabled);
+                const std::size_t visibleBindingCount = std::max<std::size_t>(bindings.size(), 1);
+                for (std::size_t index = 0; index < visibleBindingCount; ++index) {
+                    const bool unbound = bindings.empty();
+                    const bool capturingThisBinding = captureForThisField &&
+                        !m_captureBinding->append &&
+                        m_captureBinding->bindingIndex.value_or(0) == index;
+                    std::string label;
+                    if (capturingThisBinding) {
+                        label = gamepad ? "Press input..." : "Press key...";
+                    } else if (unbound) {
+                        label = "Unbound";
+                    } else if (gamepad) {
+                        label = m_input->gamepadBindingName(m_selectedPlayer, button, index);
+                    } else {
+                        const char* keyName =
+                            SDL_GetScancodeName(static_cast<SDL_Scancode>(bindings[index]));
+                        label = keyName && *keyName ? keyName : "Unbound";
+                    }
+
+                    const float buttonWidth =
+                        ImGui::CalcTextSize(label.c_str()).x + horizontalPadding;
+                    if (hasButtonOnLine && lineWidth + spacing + buttonWidth <= cellWidth) {
+                        ImGui::SameLine();
+                        lineWidth += spacing;
+                    } else {
+                        lineWidth = 0.0F;
+                    }
+                    ImGui::PushID(static_cast<int>(index));
+                    const bool leftClicked = ImGui::Button(label.c_str());
+                    const bool rightClicked = ImGui::IsItemClicked(ImGuiMouseButton_Right);
+                    const bool middleClicked = ImGui::IsItemClicked(ImGuiMouseButton_Middle);
+                    ImGui::PopID();
+                    hasButtonOnLine = true;
+                    lineWidth += buttonWidth;
+
+                    if (middleClicked && !unbound) {
+                        if (gamepad) m_input->removeGamepadBinding(m_selectedPlayer, button, index);
+                        else m_input->removeKeyboardBinding(m_selectedPlayer, button, index);
+                        m_captureBinding.reset();
+                        saveSettings();
+                        m_status = "Input binding removed.";
+                        return;
+                    }
+                    if (rightClicked) {
+                        m_captureBinding = BindingCapture{m_selectedPlayer, button, gamepad,
+                                                         std::nullopt, true};
+                    } else if (leftClicked) {
+                        m_captureBinding = BindingCapture{m_selectedPlayer, button, gamepad,
+                            unbound ? std::nullopt : std::optional<std::size_t>(index), false};
+                    }
+                }
+
+                if (captureForThisField && m_captureBinding->append) {
+                    const std::string label = gamepad ? "Press new input..." : "Press new key...";
+                    const float buttonWidth =
+                        ImGui::CalcTextSize(label.c_str()).x + horizontalPadding;
+                    if (hasButtonOnLine && lineWidth + spacing + buttonWidth <= cellWidth) {
+                        ImGui::SameLine();
+                    }
+                    ImGui::BeginDisabled();
+                    ImGui::Button(label.c_str());
+                    ImGui::EndDisabled();
+                }
+                ImGui::EndDisabled();
+            };
+
             ImGui::TableSetColumnIndex(1);
-            const auto key = static_cast<SDL_Scancode>(m_settings.keyboardBindings[m_selectedPlayer][button]);
-            const char* keyName = SDL_GetScancodeName(key);
-            const bool capturingKey = m_captureBinding && !m_captureBinding->gamepad &&
-                m_captureBinding->player == m_selectedPlayer && m_captureBinding->button == button;
-            if (ImGui::Button(capturingKey ? "Press key..." :
-                              (keyName && *keyName ? keyName : "Unbound"), ImVec2(-1, 0))) {
-                m_captureBinding = BindingCapture{m_selectedPlayer, button, false};
-            }
+            drawBindingList(false);
 
             ImGui::TableSetColumnIndex(2);
-            const SDL_JoystickID gamepadId = m_input->selectedGamepadId(m_selectedPlayer);
-            const bool capturingGamepad = m_captureBinding && m_captureBinding->gamepad &&
-                m_captureBinding->player == m_selectedPlayer && m_captureBinding->button == button;
-            const std::string bindingName = m_input->gamepadBindingName(m_selectedPlayer, button);
-            ImGui::BeginDisabled(gamepadId == 0);
-            if (ImGui::Button(capturingGamepad ? "Press button or move stick..." : bindingName.c_str(),
-                              ImVec2(-1, 0))) {
-                m_captureBinding = BindingCapture{m_selectedPlayer, button, true};
-            }
-            ImGui::EndDisabled();
+            drawBindingList(true);
             ImGui::PopID();
         }
         ImGui::EndTable();

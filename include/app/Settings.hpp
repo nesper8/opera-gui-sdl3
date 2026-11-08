@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <map>
 #include <string>
+#include <vector>
 
 namespace app {
 
@@ -23,8 +24,8 @@ struct Settings final {
     int audioLatencyMs = 80;
     float audioGain = 1.0F;
     std::array<std::string, 2> gamepadGuids{};
-    std::array<std::array<int, PadButtonCount>, 2> keyboardBindings{};
-    std::array<std::array<int, PadButtonCount>, 2> gamepadBindings{};
+    std::array<std::array<std::vector<int>, PadButtonCount>, 2> keyboardBindings{};
+    std::array<std::array<std::vector<int>, PadButtonCount>, 2> gamepadBindings{};
     std::map<std::string, std::string> coreOptions;
 
     static Settings defaults();

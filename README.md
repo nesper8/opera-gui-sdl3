@@ -18,7 +18,8 @@ not launch RetroArch.
   XInput controllers) or remappable keyboard controls. Bindings are captured
   from connected controllers or the keyboard; analog stick directions can be
   bound independently to digital controls such as the D-pad. Bindings are
-  displayed in 3DO order:
+  displayed in 3DO order. Left-click a binding to replace it, right-click to
+  add another input to the same control, and middle-click to remove a binding:
   D-pad, A/B/C, L/R, Select, and Start. Identical gamepads are distinguished
   by their enumeration order.
 - Automatically hides the settings window after a game loads; close or hide it

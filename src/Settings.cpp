@@ -9,6 +9,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string_view>
+#include <vector>
 
 namespace app {
 namespace {
@@ -43,6 +44,21 @@ bool parseBool(const std::string& value, const bool fallback) {
     return fallback;
 }
 
+std::vector<int> parseIntegerList(const std::string& value, const int fallback) {
+    std::vector<int> result;
+    if (value.empty()) return result;
+
+    std::size_t start = 0;
+    while (start <= value.size()) {
+        const std::size_t separator = value.find(',', start);
+        const std::size_t end = separator == std::string::npos ? value.size() : separator;
+        result.push_back(parseInteger(value.substr(start, end - start), fallback));
+        if (separator == std::string::npos) break;
+        start = separator + 1;
+    }
+    return result;
+}
+
 } // namespace
 
 Settings Settings::defaults() {
@@ -53,10 +69,12 @@ Settings Settings::defaults() {
     constexpr std::array<int, PadButtonCount> defaultGamepad{
         1, 0, 4, 6, 11, 12, 13, 14, 2, 3, 9, 10, -6, -7, 7, 8
     };
-    result.keyboardBindings[0] = defaultKeys;
-    result.keyboardBindings[1] = defaultKeys;
-    result.gamepadBindings[0] = defaultGamepad;
-    result.gamepadBindings[1] = defaultGamepad;
+    for (std::size_t button = 0; button < PadButtonCount; ++button) {
+        for (std::size_t player = 0; player < result.keyboardBindings.size(); ++player) {
+            result.keyboardBindings[player][button].push_back(defaultKeys[button]);
+            result.gamepadBindings[player][button].push_back(defaultGamepad[button]);
+        }
+    }
     return result;
 }
 
@@ -119,9 +137,11 @@ Settings Settings::load(const std::filesystem::path& file) {
                 const int button = parseInteger(std::string(buttonText), -1);
                 if (button >= 0 && static_cast<std::size_t>(button) < PadButtonCount) {
                     if (gamepad) {
-                        result.gamepadBindings[player][static_cast<std::size_t>(button)] = parseInteger(value, -1);
+                        result.gamepadBindings[player][static_cast<std::size_t>(button)] =
+                            parseIntegerList(value, -1);
                     } else {
-                        result.keyboardBindings[player][static_cast<std::size_t>(button)] = parseInteger(value, 0);
+                        result.keyboardBindings[player][static_cast<std::size_t>(button)] =
+                            parseIntegerList(value, 0);
                     }
                 }
             }
@@ -161,10 +181,17 @@ void Settings::save(const std::filesystem::path& file) const {
                << "player2_guid=" << gamepadGuids[1] << '\n';
         for (std::size_t player = 0; player < keyboardBindings.size(); ++player) {
             for (std::size_t button = 0; button < PadButtonCount; ++button) {
-                output << "player" << (player + 1) << "_key_" << button << '='
-                       << keyboardBindings[player][button] << '\n';
-                output << "player" << (player + 1) << "_pad_" << button << '='
-                       << gamepadBindings[player][button] << '\n';
+                output << "player" << (player + 1) << "_key_" << button << '=';
+                for (std::size_t index = 0; index < keyboardBindings[player][button].size(); ++index) {
+                    if (index != 0) output << ',';
+                    output << keyboardBindings[player][button][index];
+                }
+                output << '\n' << "player" << (player + 1) << "_pad_" << button << '=';
+                for (std::size_t index = 0; index < gamepadBindings[player][button].size(); ++index) {
+                    if (index != 0) output << ',';
+                    output << gamepadBindings[player][button][index];
+                }
+                output << '\n';
             }
         }
         output << "\n[core]\n";

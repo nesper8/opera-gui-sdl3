@@ -43,6 +43,8 @@ private:
         std::size_t player{};
         std::size_t button{};
         bool gamepad{};
+        std::optional<std::size_t> bindingIndex;
+        bool append{};
     };
 
     struct PadControl final {

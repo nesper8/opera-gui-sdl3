@@ -22,9 +22,10 @@ void testDefaultsAndRoundTrip() {
         app::Settings settings = app::Settings::defaults();
         require(settings.videoDriver == "opengl", "OpenGL must be the default video driver.");
         require(settings.audioDriver == "wasapi", "WASAPI must be the default audio driver.");
-        require(settings.keyboardBindings[0][0] != 0, "Default keyboard bindings must be populated.");
-        require(settings.gamepadBindings[0][0] == 1 && settings.gamepadBindings[0][1] == 0 &&
-                    settings.gamepadBindings[0][8] == 2,
+        require(!settings.keyboardBindings[0][0].empty(), "Default keyboard bindings must be populated.");
+        require(settings.gamepadBindings[0][0] == std::vector<int>{1} &&
+                    settings.gamepadBindings[0][1] == std::vector<int>{0} &&
+                    settings.gamepadBindings[0][8] == std::vector<int>{2},
                 "Default gamepad bindings must match the 3DO B, A, and C labels.");
         settings.videoDriver = "vulkan";
         settings.gpuPreference = "high_performance";
@@ -37,10 +38,11 @@ void testDefaultsAndRoundTrip() {
         settings.audioLatencyMs = 120;
         settings.audioGain = 0.75F;
         settings.gamepadGuids[1] = "test-guid#1";
-        settings.keyboardBindings[1][app::PadButtonCount - 1] = 77;
-        settings.gamepadBindings[1][1] = 2;
-        settings.gamepadBindings[1][12] = -6;
-        settings.gamepadBindings[1][4] = -101;
+        settings.keyboardBindings[1][app::PadButtonCount - 1] = {77, 78};
+        settings.gamepadBindings[1][1] = {2, 3};
+        settings.gamepadBindings[1][12] = {-6};
+        settings.gamepadBindings[1][4] = {-101, -103};
+        settings.gamepadBindings[1][2].clear();
         settings.coreOptions["opera_region"] = "NTSC";
         settings.save(file);
 
@@ -56,11 +58,26 @@ void testDefaultsAndRoundTrip() {
         require(loaded.audioLatencyMs == 120, "Audio latency did not persist.");
         require(loaded.audioGain == 0.75F, "Audio gain did not persist.");
         require(loaded.gamepadGuids[1] == "test-guid#1", "Gamepad selection did not persist.");
-        require(loaded.keyboardBindings[1][app::PadButtonCount - 1] == 77, "Keyboard mapping did not persist.");
-        require(loaded.gamepadBindings[1][1] == 2, "Gamepad button mapping did not persist.");
-        require(loaded.gamepadBindings[1][12] == -6, "Gamepad trigger mapping did not persist.");
-        require(loaded.gamepadBindings[1][4] == -101, "Directional stick mapping did not persist.");
+        require(loaded.keyboardBindings[1][app::PadButtonCount - 1] == std::vector<int>{77, 78},
+                "Multiple keyboard mappings did not persist.");
+        require(loaded.gamepadBindings[1][1] == std::vector<int>{2, 3},
+                "Multiple gamepad button mappings did not persist.");
+        require(loaded.gamepadBindings[1][12] == std::vector<int>{-6},
+                "Gamepad trigger mapping did not persist.");
+        require(loaded.gamepadBindings[1][4] == std::vector<int>{-101, -103},
+                "Multiple directional stick mappings did not persist.");
+        require(loaded.gamepadBindings[1][2].empty(), "Removed gamepad mappings did not persist.");
         require(loaded.coreOptions.at("opera_region") == "NTSC", "Core option did not persist.");
+
+        {
+            std::ofstream output(file, std::ios::trunc);
+            output << "[input]\nplayer1_pad_4=-101\nplayer1_key_4=82,81\n";
+        }
+        const app::Settings migrated = app::Settings::load(file);
+        require(migrated.gamepadBindings[0][4] == std::vector<int>{-101},
+                "Legacy single-value gamepad mappings must remain compatible.");
+        require(migrated.keyboardBindings[0][4] == std::vector<int>{82, 81},
+                "Multiple mappings must load from the settings file.");
 
         {
             std::ofstream output(file, std::ios::trunc);

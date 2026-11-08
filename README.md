@@ -9,7 +9,9 @@ not launch RetroArch.
   extracts it to the application's `cores` directory, and installs the DLL
   only after extraction succeeds.
 - Loads the DLL through the libretro API and exposes version-1 core options
-  with legacy option fallback in the settings window.
+  with legacy option fallback in the settings window, with a control to restore
+  the Opera core's option defaults.
+- Provides a section-specific revert-to-defaults control on each settings tab.
 - Opens ISO and BIN/CUE images using SDL's native file dialog. CHD loading is
   temporarily unavailable.
 - Routes the two emulated joypads independently to an SDL gamepad (including

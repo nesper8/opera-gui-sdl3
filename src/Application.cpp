@@ -162,11 +162,16 @@ int Application::run() {
             }
         }
         if (m_core && m_core->gameLoaded()) {
-            const auto now = Clock::now();
-            const auto frameDuration = std::chrono::duration<double>(1.0 / m_core->frameRate());
-            if (now >= nextCoreFrame) {
+            const auto frameDuration = std::chrono::duration_cast<Clock::duration>(
+                std::chrono::duration<double>(1.0 / m_core->frameRate()));
+            constexpr unsigned MaxCatchUpFrames = 4;
+            unsigned catchUpFrames = 0;
+            auto now = Clock::now();
+            while (now >= nextCoreFrame && catchUpFrames < MaxCatchUpFrames) {
                 m_core->run();
-                nextCoreFrame = now + std::chrono::duration_cast<Clock::duration>(frameDuration);
+                nextCoreFrame += frameDuration;
+                ++catchUpFrames;
+                now = Clock::now();
             }
         } else {
             nextCoreFrame = Clock::now();
@@ -379,6 +384,21 @@ const std::array<Application::PadControl, PadButtonCount>& Application::padContr
 }
 
 void Application::drawInputSettings() {
+    if (ImGui::Button("Revert input settings to defaults")) {
+        const Settings defaults = Settings::defaults();
+        m_settings.keyboardBindings = defaults.keyboardBindings;
+        m_settings.gamepadBindings = defaults.gamepadBindings;
+        m_settings.gamepadGuids = defaults.gamepadGuids;
+        m_captureBinding.reset();
+        try {
+            m_input->refresh();
+            saveSettings();
+            if (m_error.empty()) m_status = "Input settings reverted to defaults.";
+        } catch (const std::exception& error) {
+            setError(std::string("Unable to reset input settings: ") + error.what());
+        }
+    }
+
     if (ImGui::BeginCombo("Player", playerName(m_selectedPlayer))) {
         for (std::size_t player = 0; player < 2; ++player) {
             const bool selected = m_selectedPlayer == player;
@@ -464,6 +484,60 @@ void Application::drawInputSettings() {
 }
 
 void Application::drawVideoSettings() {
+    if (ImGui::Button("Revert video settings to defaults")) {
+        const Settings defaults = Settings::defaults();
+        const Settings previousSettings = m_settings;
+        try {
+            setWindowsGpuPreference(defaults.gpuPreference);
+            m_settings.videoDriver = defaults.videoDriver;
+            m_settings.gpuPreference = defaults.gpuPreference;
+            m_settings.scaleMode = defaults.scaleMode;
+            m_settings.shaderPreset = defaults.shaderPreset;
+            m_settings.vsync = defaults.vsync;
+            m_settings.fullscreen = defaults.fullscreen;
+            if (!SDL_SetWindowFullscreen(m_window, m_settings.fullscreen)) {
+                throw std::runtime_error(std::string("Unable to restore window mode: ") + SDL_GetError());
+            }
+            if (m_frameTexture) {
+                SDL_SetTextureScaleMode(m_frameTexture, SDL_SCALEMODE_NEAREST);
+            }
+            m_vsyncActive = SDL_SetRenderVSync(m_renderer, m_settings.vsync ? 1 : 0);
+            if (!m_vsyncActive) {
+                m_settings.vsync = false;
+                throw std::runtime_error(std::string("Unable to restore VSync: ") + SDL_GetError());
+            }
+            saveSettings();
+            if (m_error.empty()) {
+                m_status = "Video settings reverted. Restart to apply the video driver and GPU defaults.";
+            }
+        } catch (const std::exception& error) {
+            m_settings = previousSettings;
+            if (!SDL_SetWindowFullscreen(m_window, previousSettings.fullscreen)) {
+                Logger::write(LogLevel::Error,
+                    std::string("Unable to restore the previous window mode: ") + SDL_GetError());
+            }
+            m_vsyncActive = SDL_SetRenderVSync(m_renderer, previousSettings.vsync ? 1 : 0);
+            if (!m_vsyncActive) {
+                Logger::write(LogLevel::Error,
+                    std::string("Unable to restore previous VSync: ") + SDL_GetError());
+            }
+            if (m_frameTexture) {
+                SDL_SetTextureScaleMode(m_frameTexture,
+                    previousSettings.scaleMode == "nearest" ? SDL_SCALEMODE_NEAREST : SDL_SCALEMODE_LINEAR);
+            }
+            try {
+                setWindowsGpuPreference(previousSettings.gpuPreference);
+            } catch (const std::exception& restoreError) {
+                Logger::write(LogLevel::Error,
+                    std::string("Unable to restore the previous Windows GPU preference: ") +
+                    restoreError.what());
+            }
+            setError(std::string("Unable to revert video settings: ") + error.what());
+        }
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("Video settings only.");
+
     bool changed = selectableCombo("Video driver", m_settings.videoDriver,
         {{"opengl", "OpenGL"}, {"vulkan", "Vulkan"}});
     const std::string previousGpuPreference = m_settings.gpuPreference;
@@ -507,6 +581,37 @@ void Application::drawVideoSettings() {
 }
 
 void Application::drawAudioSettings() {
+    if (ImGui::Button("Revert audio settings to defaults")) {
+        const Settings defaults = Settings::defaults();
+        const std::string previousDriver = m_settings.audioDriver;
+        const std::string previousDevice = m_settings.audioDevice;
+        const int previousLatency = m_settings.audioLatencyMs;
+        const float previousGain = m_settings.audioGain;
+        m_settings.audioDriver = defaults.audioDriver;
+        m_settings.audioDevice = defaults.audioDevice;
+        m_settings.audioLatencyMs = defaults.audioLatencyMs;
+        m_settings.audioGain = defaults.audioGain;
+        try {
+            if (m_core && m_core->gameLoaded()) {
+                m_audio->configure(m_core->sampleRate());
+            } else {
+                m_audio->setGain(m_settings.audioGain);
+            }
+            saveSettings();
+            if (m_error.empty()) {
+                m_status = "Audio settings reverted. Restart to apply the audio driver default.";
+            }
+        } catch (const std::exception& error) {
+            m_settings.audioDriver = previousDriver;
+            m_settings.audioDevice = previousDevice;
+            m_settings.audioLatencyMs = previousLatency;
+            m_settings.audioGain = previousGain;
+            setError(std::string("Unable to revert audio settings: ") + error.what());
+        }
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("Audio settings only.");
+
     const bool driverChanged = selectableCombo("Audio driver", m_settings.audioDriver,
         {{"wasapi", "WASAPI"}, {"default", "SDL default"}});
     bool outputChanged = false;
@@ -566,6 +671,11 @@ void Application::drawAudioSettings() {
 }
 
 void Application::drawPerformanceSettings() {
+    if (ImGui::Button("Revert performance settings to defaults")) {
+        m_settings.showFpsCounter = Settings::defaults().showFpsCounter;
+        saveSettings();
+        if (m_error.empty()) m_status = "Performance settings reverted to defaults.";
+    }
     if (ImGui::Checkbox("Show FPS counter (F3)", &m_settings.showFpsCounter)) {
         saveSettings();
     }
@@ -596,6 +706,21 @@ void Application::drawCoreSettings() {
     }
     ImGui::Text("%s", m_coreName.c_str());
     if (!m_core->gameLoaded()) ImGui::TextUnformatted("Load a game to begin emulation.");
+    if (ImGui::Button("Revert to defaults")) {
+        try {
+            m_core->resetOptionsToDefaults();
+            m_settings.coreOptions.clear();
+            for (const CoreOption& option : m_core->options()) {
+                m_settings.coreOptions.emplace(option.key, option.currentValue);
+            }
+            saveSettings();
+            if (m_error.empty()) m_status = "Opera core options reverted to defaults.";
+        } catch (const std::exception& error) {
+            setError(std::string("Unable to revert Opera core options: ") + error.what());
+        }
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("Resets Opera core options only.");
     for (const auto& option : m_core->options()) {
         if (option.values.empty()) continue;
         int selected = 0;

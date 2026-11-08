@@ -14,6 +14,7 @@ struct CoreOption final {
     std::string key;
     std::string description;
     std::vector<std::string> values;
+    std::string defaultValue;
     std::string currentValue;
 };
 
@@ -41,6 +42,7 @@ public:
     void loadGame(const std::filesystem::path& gameFile);
     void run();
     void reset();
+    void resetOptionsToDefaults();
     void setOption(const std::string& key, const std::string& value);
     const std::vector<CoreOption>& options() const noexcept { return m_options; }
     const std::string& coreName() const noexcept { return m_coreName; }

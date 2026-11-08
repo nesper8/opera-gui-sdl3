@@ -215,6 +215,19 @@ void LibretroCore::reset() {
     if (m_gameLoaded) m_reset();
 }
 
+void LibretroCore::resetOptionsToDefaults() {
+    std::map<std::string, std::string> defaults;
+    for (const CoreOption& option : m_options) {
+        if (std::find(option.values.begin(), option.values.end(), option.defaultValue) == option.values.end()) {
+            throw std::logic_error("Opera core option has an invalid default: " + option.key);
+        }
+        defaults.emplace(option.key, option.defaultValue);
+    }
+    for (const auto& [key, value] : defaults) {
+        setOption(key, value);
+    }
+}
+
 void LibretroCore::setOption(const std::string& key, const std::string& value) {
     const auto option = std::find_if(m_options.begin(), m_options.end(),
                                      [&key](const CoreOption& item) { return item.key == key; });
@@ -241,7 +254,8 @@ void LibretroCore::parseOptions(const Variable* variables) {
         option.values = splitValues(separator == std::string::npos
             ? std::string_view{} : std::string_view(description).substr(separator + 1));
         if (option.values.empty()) continue;
-        option.currentValue = option.values.front();
+        option.defaultValue = option.values.front();
+        option.currentValue = option.defaultValue;
         m_variables.insert_or_assign(option.key, option.currentValue);
         m_options.push_back(std::move(option));
     }
@@ -261,10 +275,11 @@ void LibretroCore::parseCoreOptions(const CoreOptionDefinition* definitions) {
             option.values.emplace_back(value.value);
         }
         if (option.values.empty()) continue;
-        option.currentValue = definition->defaultValue ? definition->defaultValue : option.values.front();
-        if (std::find(option.values.begin(), option.values.end(), option.currentValue) == option.values.end()) {
-            option.currentValue = option.values.front();
+        option.defaultValue = definition->defaultValue ? definition->defaultValue : option.values.front();
+        if (std::find(option.values.begin(), option.values.end(), option.defaultValue) == option.values.end()) {
+            option.defaultValue = option.values.front();
         }
+        option.currentValue = option.defaultValue;
         m_variables.insert_or_assign(option.key, option.currentValue);
         m_options.push_back(std::move(option));
     }

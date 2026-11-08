@@ -67,6 +67,7 @@ private:
     void loadCore();
     void checkDownload();
     void requestCoreDownload();
+    bool setFullscreen(bool fullscreen);
     void saveSettings();
     void setError(const std::string& message);
     void onVideo(const void* data, unsigned width, unsigned height, std::size_t pitch);
@@ -105,6 +106,7 @@ private:
     std::future<std::filesystem::path> m_download;
     std::optional<BindingCapture> m_captureBinding;
     std::optional<std::filesystem::path> m_pendingGame;
+    std::optional<bool> m_pendingFullscreen;
     std::size_t m_selectedPlayer{};
 };
 

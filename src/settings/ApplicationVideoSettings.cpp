@@ -33,9 +33,7 @@ void Application::drawVideoSettings() {
             m_settings.shaderPreset = defaults.shaderPreset;
             m_settings.vsync = defaults.vsync;
             m_settings.fullscreen = defaults.fullscreen;
-            if (!m_runtime.setFullscreen(m_settings.fullscreen)) {
-                throw std::runtime_error(std::string("Unable to restore window mode: ") + SDL_GetError());
-            }
+            m_pendingFullscreen = m_settings.fullscreen;
             if (m_frameTexture) {
                 SDL_SetTextureScaleMode(m_frameTexture, SDL_SCALEMODE_NEAREST);
             }
@@ -62,10 +60,7 @@ void Application::drawVideoSettings() {
                         restoreError.what());
                 }
             }
-            if (!m_runtime.setFullscreen(previousSettings.fullscreen)) {
-                Logger::write(LogLevel::Error,
-                    std::string("Unable to restore the previous window mode: ") + SDL_GetError());
-            }
+            m_pendingFullscreen = previousSettings.fullscreen;
             if (!m_runtime.setVsync(previousSettings.vsync)) {
                 Logger::write(LogLevel::Error,
                     std::string("Unable to restore previous VSync: ") + SDL_GetError());
@@ -142,7 +137,7 @@ void Application::drawVideoSettings() {
     }
 
     if (ImGui::Checkbox("Fullscreen (F11)", &m_settings.fullscreen)) {
-        if (!m_runtime.setFullscreen(m_settings.fullscreen)) setError(SDL_GetError());
+        m_pendingFullscreen = m_settings.fullscreen;
         changed = true;
     }
     if (changed) {

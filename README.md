@@ -27,7 +27,7 @@ not launch RetroArch.
   an optional rendered-FPS counter that can be enabled in the Performance tab
   or toggled at any time with F3.
 - Selects SDL's OpenGL or Vulkan renderer, nearest/linear scaling, VSync,
-  fullscreen, and a built-in CRT scanline presentation preset. On Windows,
+  borderless desktop fullscreen, and a built-in CRT scanline presentation preset. On Windows,
   the GPU preference can be set to system default, power-saving, or
   high-performance; the choice is stored as a per-application Windows graphics
   preference and takes effect after restarting the frontend.

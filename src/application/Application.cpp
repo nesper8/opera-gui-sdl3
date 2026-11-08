@@ -134,6 +134,17 @@ int Application::run() {
         SDL_Event event{};
         while (SDL_PollEvent(&event)) handleEvent(event);
         checkDownload();
+        if (m_pendingFullscreen) {
+            const bool fullscreen = *m_pendingFullscreen;
+            m_pendingFullscreen.reset();
+            if (!setFullscreen(fullscreen)) {
+                m_settings.fullscreen = m_runtime.fullscreen();
+                setError(std::string("Unable to change fullscreen mode: ") + SDL_GetError());
+                saveSettings();
+            } else {
+                nextCoreFrame = Clock::now();
+            }
+        }
         if (m_pendingGame) {
             const auto selectedGame = std::move(*m_pendingGame);
             m_pendingGame.reset();
@@ -225,6 +236,16 @@ void Application::handleEvent(const SDL_Event& event) {
     }
     if (event.type == SDL_EVENT_QUIT) {
         m_running = false;
+    } else if (event.type == SDL_EVENT_RENDER_DEVICE_RESET) {
+        if (m_frameTexture) SDL_DestroyTexture(m_frameTexture);
+        m_frameTexture = nullptr;
+        m_frameTextureWidth = 0;
+        m_frameTextureHeight = 0;
+        m_frameTextureFormat = 0;
+        m_frame.dirty = true;
+        if (!m_runtime.recreateRendererDeviceObjects()) {
+            setError(std::string("Unable to recreate renderer resources: ") + SDL_GetError());
+        }
     } else if (event.type == SDL_EVENT_GAMEPAD_ADDED || event.type == SDL_EVENT_GAMEPAD_REMOVED) {
         try {
             m_session.input()->refresh();
@@ -250,7 +271,7 @@ void Application::handleEvent(const SDL_Event& event) {
     } else if (!bindingWasActive && event.type == SDL_EVENT_KEY_DOWN &&
                event.key.key == SDLK_F11 && !event.key.repeat) {
         m_settings.fullscreen = !m_settings.fullscreen;
-        if (!m_runtime.setFullscreen(m_settings.fullscreen)) setError(SDL_GetError());
+        m_pendingFullscreen = m_settings.fullscreen;
         saveSettings();
     } else if (!bindingWasActive && event.type == SDL_EVENT_KEY_DOWN &&
                event.key.key == SDLK_F1 && !event.key.repeat) {

@@ -84,6 +84,10 @@ void Application::requestCoreDownload() {
     });
 }
 
+bool Application::setFullscreen(const bool fullscreen) {
+    return m_runtime.setFullscreen(fullscreen);
+}
+
 void Application::saveSettings() {
     try {
         m_settings.save(m_settingsFile);

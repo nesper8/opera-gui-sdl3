@@ -17,6 +17,7 @@ struct Settings final {
     bool vsync = true;
     bool fullscreen = false;
     bool showFpsCounter = false;
+    bool useDetectedBios = true;
     std::string audioDriver = "wasapi";
     float audioGain = 1.0F;
     std::array<std::string, 2> gamepadGuids{};

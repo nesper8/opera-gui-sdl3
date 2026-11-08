@@ -75,6 +75,7 @@ private:
     std::filesystem::path m_preferencesDirectory;
     std::filesystem::path m_settingsFile;
     std::filesystem::path m_coreDirectory;
+    std::filesystem::path m_biosDirectory;
     std::filesystem::path m_systemDirectory;
     std::filesystem::path m_saveDirectory;
     std::string m_imguiIniFile;
@@ -101,6 +102,7 @@ private:
     std::string m_error;
     std::string m_coreName;
     std::string m_gamePath;
+    std::optional<std::filesystem::path> m_detectedBios;
     VideoFrame m_frame;
     std::unique_ptr<InputManager> m_input;
     std::unique_ptr<AudioOutput> m_audio;

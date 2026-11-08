@@ -68,6 +68,32 @@ const char* playerName(const std::size_t player) {
     return player == 0 ? "Player 1" : "Player 2";
 }
 
+std::optional<std::filesystem::path> detectOperaBios(const std::filesystem::path& directory) {
+    static constexpr std::array<const char*, 10> biosFiles{
+        "panafz1.bin",
+        "panafz10.bin",
+        "panafz10-norsa.bin",
+        "panafz10e-anvil.bin",
+        "panafz10e-anvil-norsa.bin",
+        "panafz1j.bin",
+        "panafz1j-norsa.bin",
+        "goldstar.bin",
+        "sanyotry.bin",
+        "3do_arcade_saot.bin"
+    };
+    for (const char* filename : biosFiles) {
+        const auto candidate = directory / filename;
+        std::error_code error;
+        const bool isFile = std::filesystem::is_regular_file(candidate, error);
+        if (error) {
+            throw std::filesystem::filesystem_error("Unable to inspect Opera BIOS file",
+                                                    candidate, error);
+        }
+        if (isFile) return candidate;
+    }
+    return std::nullopt;
+}
+
 } // namespace
 
 Application::Application() {
@@ -82,14 +108,20 @@ Application::Application() {
     SDL_free(const_cast<char*>(preferencesPath));
     m_settingsFile = m_preferencesDirectory / "settings.ini";
     m_coreDirectory = m_baseDirectory / "cores";
+    m_biosDirectory = m_baseDirectory / "bios";
     m_systemDirectory = m_preferencesDirectory / "system";
     m_saveDirectory = m_preferencesDirectory / "saves";
     m_imguiIniFile = pathToUtf8(m_preferencesDirectory / "imgui.ini");
     std::filesystem::create_directories(m_systemDirectory);
+    std::filesystem::create_directories(m_biosDirectory);
     std::filesystem::create_directories(m_saveDirectory);
 
     Logger::initialize(m_preferencesDirectory / "opera-frontend.log");
     m_settings = Settings::load(m_settingsFile);
+    m_detectedBios = detectOperaBios(m_biosDirectory);
+    if (m_settings.useDetectedBios && m_detectedBios) {
+        m_systemDirectory = m_biosDirectory;
+    }
 }
 
 Application::~Application() {
@@ -486,7 +518,19 @@ void Application::drawPerformanceSettings() {
 
 void Application::drawCoreSettings() {
     const std::string systemDirectory = pathToUtf8(m_systemDirectory);
+    const std::string biosDirectory = pathToUtf8(m_biosDirectory);
     const std::string saveDirectory = pathToUtf8(m_saveDirectory);
+    ImGui::TextWrapped("Optional BIOS directory: %s", biosDirectory.c_str());
+    if (m_detectedBios) {
+        const std::string biosName = pathToUtf8(m_detectedBios->filename());
+        ImGui::TextWrapped("BIOS file found: %s", biosName.c_str());
+    } else {
+        ImGui::TextUnformatted("BIOS file found: none; using the user system directory.");
+    }
+    if (ImGui::Checkbox("Use detected BIOS when available", &m_settings.useDetectedBios)) {
+        saveSettings();
+        m_status = "Restart the application to apply the BIOS setting.";
+    }
     ImGui::TextWrapped("System files: %s", systemDirectory.c_str());
     ImGui::TextWrapped("Save files: %s", saveDirectory.c_str());
     if (!m_core) {

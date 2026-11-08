@@ -101,6 +101,10 @@ Settings Settings::load(const std::filesystem::path& file) {
             else if (key == "gain") result.audioGain = std::clamp(parseGain(value, result.audioGain), 0.0F, 2.0F);
         } else if (section == "performance") {
             if (key == "fps_counter") result.showFpsCounter = parseBool(value, result.showFpsCounter);
+        } else if (section == "system") {
+            if (key == "use_detected_bios") {
+                result.useDetectedBios = parseBool(value, result.useDetectedBios);
+            }
         } else if (section == "input") {
             if (key == "player1_guid") result.gamepadGuids[0] = value;
             else if (key == "player2_guid") result.gamepadGuids[1] = value;
@@ -145,6 +149,8 @@ void Settings::save(const std::filesystem::path& file) const {
                << "gain=" << audioGain << "\n\n"
                << "[performance]\n"
                << "fps_counter=" << (showFpsCounter ? "true" : "false") << "\n\n"
+               << "[system]\n"
+               << "use_detected_bios=" << (useDetectedBios ? "true" : "false") << "\n\n"
                << "[input]\n"
                << "player1_guid=" << gamepadGuids[0] << '\n'
                << "player2_guid=" << gamepadGuids[1] << '\n';

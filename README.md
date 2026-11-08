@@ -28,14 +28,19 @@ not launch RetroArch.
   preference and takes effect after restarting the frontend.
 - Uses SDL audio with WASAPI selected by default, a system-default audio
   backend option, and adjustable output gain.
+- Detects supported 3DO BIOS filenames in the application's `bios` directory
+  and uses that directory as the core system directory when enabled. Detection
+  is optional; when no BIOS is found, the existing user system directory is used.
 - Persists settings under the current user's SDL preferences directory and
   records diagnostics in `opera-frontend.log`.
 
 The initial CRT preset is a scanline overlay, not a programmable shader chain;
 loading arbitrary RetroArch `.glsl`, `.slang`, or `.preset` shaders is not yet
 supported.
-CHD files do not include copyrighted firmware; provide any core-required
-system files in the core's displayed system directory.
+CHD files do not include copyrighted firmware. Any BIOS files must be legally
+obtained by the user. When BIOS detection is enabled, place a supported BIOS
+file in `bios` beside the application; the Core tab shows the detected file and
+active system directory. Changing this option requires restarting the app.
 
 ## Build
 

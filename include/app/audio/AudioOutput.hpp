@@ -1,6 +1,6 @@
 #pragma once
 
-#include "app/Settings.hpp"
+#include "app/settings/Settings.hpp"
 
 #include <SDL3/SDL.h>
 

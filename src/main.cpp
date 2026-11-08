@@ -1,6 +1,6 @@
-#include "app/Application.hpp"
+#include "app/application/Application.hpp"
 
-#include "app/Logger.hpp"
+#include "app/logging/Logger.hpp"
 
 #include <exception>
 #include <iostream>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "app/LibretroAbi.hpp"
+#include "app/core/LibretroAbi.hpp"
 
 #include <filesystem>
 #include <functional>

@@ -1,10 +1,9 @@
 #pragma once
 
-#include "app/AudioOutput.hpp"
-#include "app/CoreDownloader.hpp"
-#include "app/InputManager.hpp"
-#include "app/LibretroCore.hpp"
-#include "app/Settings.hpp"
+#include "app/audio/AudioOutput.hpp"
+#include "app/platform/FrontendRuntime.hpp"
+#include "app/session/GameSession.hpp"
+#include "app/settings/Settings.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -53,6 +52,7 @@ private:
     };
 
     static void fileDialogCallback(void* userdata, const char* const* filelist, int filter);
+    static std::string pathToUtf8(const std::filesystem::path& path);
     void initialize();
     void handleEvent(const SDL_Event& event);
     void drawInterface();
@@ -82,34 +82,26 @@ private:
     std::filesystem::path m_saveDirectory;
     std::string m_imguiIniFile;
     Settings m_settings;
-    SDL_Window* m_window{};
-    SDL_Renderer* m_renderer{};
+    FrontendRuntime m_runtime;
     SDL_Texture* m_frameTexture{};
     int m_frameTextureWidth{};
     int m_frameTextureHeight{};
     unsigned m_frameTextureFormat{};
     unsigned m_pixelFormat{};
     bool m_running{true};
-    bool m_sdlInitialized{};
-    bool m_vsyncActive{};
     bool m_uiVisible{true};
     std::chrono::steady_clock::time_point m_menuHintStart{};
     std::chrono::steady_clock::time_point m_fpsLastUpdate{};
     std::size_t m_fpsFrameCount{};
     double m_fpsValue{};
-    bool m_imguiContext{};
-    bool m_imguiPlatformInitialized{};
-    bool m_imguiRendererInitialized{};
     std::string m_status = "Download the Opera core to get started.";
     std::string m_error;
     std::string m_coreName;
     std::string m_gamePath;
     std::optional<std::filesystem::path> m_detectedBios;
     VideoFrame m_frame;
-    std::unique_ptr<InputManager> m_input;
-    std::unique_ptr<AudioOutput> m_audio;
+    GameSession m_session;
     std::vector<AudioDeviceInfo> m_audioDevices;
-    std::unique_ptr<LibretroCore> m_core;
     std::future<std::filesystem::path> m_download;
     std::optional<BindingCapture> m_captureBinding;
     std::optional<std::filesystem::path> m_pendingGame;

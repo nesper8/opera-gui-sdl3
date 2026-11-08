@@ -1,6 +1,6 @@
-#include "app/LibretroCore.hpp"
+#include "app/core/LibretroCore.hpp"
 
-#include "app/Logger.hpp"
+#include "app/logging/Logger.hpp"
 
 #include <windows.h>
 

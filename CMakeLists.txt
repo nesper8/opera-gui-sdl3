@@ -88,14 +88,23 @@ find_library(WINHTTP_LIBRARY
 )
 
 add_executable(opera_frontend
-    src/Application.cpp
-    src/AudioOutput.cpp
-    src/CoreDownloader.cpp
-    src/InputManager.cpp
-    src/LibretroCore.cpp
-    src/Logger.cpp
-    src/Settings.cpp
-    src/WindowsGpuPreference.cpp
+    src/application/Application.cpp
+    src/application/ApplicationCore.cpp
+    src/application/ApplicationRendering.cpp
+    src/settings/ApplicationAudioSettings.cpp
+    src/settings/ApplicationCoreSettings.cpp
+    src/settings/ApplicationInputSettings.cpp
+    src/settings/ApplicationSettings.cpp
+    src/settings/ApplicationVideoSettings.cpp
+    src/audio/AudioOutput.cpp
+    src/core/CoreDownloader.cpp
+    src/core/LibretroCore.cpp
+    src/input/InputManager.cpp
+    src/logging/Logger.cpp
+    src/platform/FrontendRuntime.cpp
+    src/platform/WindowsGpuPreference.cpp
+    src/session/GameSession.cpp
+    src/settings/Settings.cpp
     src/main.cpp
     "${imgui_SOURCE_DIR}/imgui.cpp"
     "${imgui_SOURCE_DIR}/imgui_draw.cpp"
@@ -124,7 +133,7 @@ endif()
 include(CTest)
 option(OPERA_ENABLE_DOWNLOAD_INTEGRATION_TEST "Enable the network-dependent core download test" OFF)
 if(BUILD_TESTING)
-    add_executable(settings_tests tests/SettingsTests.cpp src/Settings.cpp)
+    add_executable(settings_tests tests/SettingsTests.cpp src/settings/Settings.cpp)
     target_compile_features(settings_tests PRIVATE cxx_std_20)
     target_include_directories(settings_tests PRIVATE include)
     if(MSVC)
@@ -137,9 +146,9 @@ if(BUILD_TESTING)
     if(OPERA_ENABLE_DOWNLOAD_INTEGRATION_TEST)
         add_executable(core_downloader_tests
             tests/CoreDownloaderTests.cpp
-            src/CoreDownloader.cpp
-            src/LibretroCore.cpp
-            src/Logger.cpp
+            src/core/CoreDownloader.cpp
+            src/core/LibretroCore.cpp
+            src/logging/Logger.cpp
         )
         target_compile_features(core_downloader_tests PRIVATE cxx_std_20)
         target_compile_definitions(core_downloader_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)

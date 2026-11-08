@@ -1,6 +1,6 @@
-#include "app/InputManager.hpp"
+#include "app/input/InputManager.hpp"
 
-#include "app/Logger.hpp"
+#include "app/logging/Logger.hpp"
 
 #include <algorithm>
 #include <array>

@@ -1,6 +1,6 @@
-#include "app/CoreDownloader.hpp"
-#include "app/LibretroCore.hpp"
-#include "app/Logger.hpp"
+#include "app/core/CoreDownloader.hpp"
+#include "app/core/LibretroCore.hpp"
+#include "app/logging/Logger.hpp"
 
 #include <chrono>
 #include <filesystem>

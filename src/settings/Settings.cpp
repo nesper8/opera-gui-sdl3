@@ -1,4 +1,4 @@
-#include "app/Settings.hpp"
+#include "app/settings/Settings.hpp"
 
 #include <windows.h>
 

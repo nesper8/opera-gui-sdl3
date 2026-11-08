@@ -1,6 +1,6 @@
-#include "app/AudioOutput.hpp"
+#include "app/audio/AudioOutput.hpp"
 
-#include "app/Logger.hpp"
+#include "app/logging/Logger.hpp"
 
 #include <algorithm>
 #include <cmath>

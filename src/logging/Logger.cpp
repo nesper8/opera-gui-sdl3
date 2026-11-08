@@ -1,4 +1,4 @@
-#include "app/Logger.hpp"
+#include "app/logging/Logger.hpp"
 
 #include <chrono>
 #include <fstream>

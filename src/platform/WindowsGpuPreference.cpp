@@ -1,4 +1,4 @@
-#include "app/WindowsGpuPreference.hpp"
+#include "app/platform/WindowsGpuPreference.hpp"
 
 #include <windows.h>
 

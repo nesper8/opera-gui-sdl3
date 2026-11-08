@@ -59,6 +59,7 @@ void FrontendRuntime::initialize(const Settings& settings, const std::string& im
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     m_imguiContext = true;
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
     ImGui::GetIO().IniFilename = imguiIniFile.c_str();
     ImGui::StyleColorsDark();
     if (!ImGui_ImplSDL3_InitForSDLRenderer(m_window, m_renderer)) {

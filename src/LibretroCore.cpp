@@ -183,6 +183,16 @@ void LibretroCore::loadGame(const std::filesystem::path& gameFile) {
         m_gameLoaded = false;
         throw std::runtime_error("Opera core reported invalid audio/video timing.");
     }
+    const auto expectedAudioSamples = static_cast<std::size_t>(
+        std::ceil((m_sampleRate / m_frameRate) * 2.0));
+    m_pendingAudio.clear();
+    try {
+        m_pendingAudio.reserve(expectedAudioSamples);
+    } catch (...) {
+        m_unloadGame();
+        m_gameLoaded = false;
+        throw;
+    }
     if (m_setControllerPortDevice) {
         m_setControllerPortDevice(0, DeviceJoypad);
         m_setControllerPortDevice(1, DeviceJoypad);
@@ -191,7 +201,14 @@ void LibretroCore::loadGame(const std::filesystem::path& gameFile) {
 
 void LibretroCore::run() {
     if (!m_gameLoaded) return;
+    m_pendingAudio.clear();
     m_run();
+    if (m_pendingAudio.empty() || !m_callbacks.audio) return;
+    protectCallback("audio frame", [&] {
+        m_callbacks.audio(m_pendingAudio.data(), m_pendingAudio.size() / 2);
+    }, [this](const std::string& error) {
+        if (m_callbacks.error) m_callbacks.error(error);
+    });
 }
 
 void LibretroCore::reset() {
@@ -401,11 +418,16 @@ void LibretroCore::videoRefresh(const void* data, const unsigned width, const un
 void LibretroCore::audioSample(const std::int16_t left, const std::int16_t right) noexcept {
     auto* self = s_active;
     if (!self || !self->m_callbacks.audio) return;
-    const std::array<std::int16_t, 2> sample{left, right};
-    protectCallback("audio", [&] { self->m_callbacks.audio(sample.data(), 1); },
-                    [self](const std::string& error) {
-                        if (self->m_callbacks.error) self->m_callbacks.error(error);
-                    });
+    protectCallback("audio sample", [&] {
+        constexpr std::size_t MaxSamplesPerRun = 1U << 20U;
+        if (self->m_pendingAudio.size() > MaxSamplesPerRun - 2) {
+            throw std::runtime_error("Opera core produced too many audio samples in one frame.");
+        }
+        self->m_pendingAudio.push_back(left);
+        self->m_pendingAudio.push_back(right);
+    }, [self](const std::string& error) {
+        if (self->m_callbacks.error) self->m_callbacks.error(error);
+    });
 }
 
 std::size_t LibretroCore::audioSampleBatch(const std::int16_t* data, const std::size_t frames) noexcept {
@@ -413,7 +435,14 @@ std::size_t LibretroCore::audioSampleBatch(const std::int16_t* data, const std::
     if (!self || !self->m_callbacks.audio) return 0;
     std::size_t accepted = 0;
     protectCallback("audio batch", [&] {
-        self->m_callbacks.audio(data, frames);
+        constexpr std::size_t MaxSamplesPerRun = 1U << 20U;
+        if (frames > (MaxSamplesPerRun - self->m_pendingAudio.size()) / 2 ||
+            (frames > 0 && !data)) {
+            throw std::runtime_error("Opera core produced an invalid or oversized audio batch.");
+        }
+        if (frames > 0) {
+            self->m_pendingAudio.insert(self->m_pendingAudio.end(), data, data + frames * 2);
+        }
         accepted = frames;
     }, [self](const std::string& error) {
         if (self->m_callbacks.error) self->m_callbacks.error(error);

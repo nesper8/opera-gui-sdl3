@@ -82,6 +82,7 @@ private:
     double m_sampleRate{};
     std::map<std::string, std::string> m_variables;
     std::vector<CoreOption> m_options;
+    std::vector<std::int16_t> m_pendingAudio;
 
     EnvironmentFn m_setEnvironment{};
     VideoFn m_setVideoRefresh{};

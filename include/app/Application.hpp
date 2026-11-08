@@ -34,7 +34,8 @@ private:
     struct VideoFrame final {
         unsigned width{};
         unsigned height{};
-        std::vector<std::uint32_t> pixels;
+        unsigned pixelFormat{};
+        std::vector<std::uint8_t> pixels;
         bool dirty{};
     };
 
@@ -83,6 +84,7 @@ private:
     SDL_Texture* m_frameTexture{};
     int m_frameTextureWidth{};
     int m_frameTextureHeight{};
+    unsigned m_frameTextureFormat{};
     unsigned m_pixelFormat{};
     bool m_running{true};
     bool m_sdlInitialized{};

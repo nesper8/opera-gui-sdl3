@@ -695,8 +695,18 @@ void Application::onVideo(const void* data, const unsigned width, const unsigned
     if (static_cast<std::size_t>(width) * height > 16U * 1024U * 1024U) {
         throw std::runtime_error("Opera core reported an oversized video frame.");
     }
-    const unsigned bytesPerPixel = m_pixelFormat == libretro::Pixel0Rgb1555 ||
-        m_pixelFormat == libretro::PixelRgb565 ? 2U : 4U;
+    unsigned bytesPerPixel{};
+    switch (m_pixelFormat) {
+    case libretro::Pixel0Rgb1555:
+    case libretro::PixelRgb565:
+        bytesPerPixel = 2;
+        break;
+    case libretro::PixelXrgb8888:
+        bytesPerPixel = 4;
+        break;
+    default:
+        throw std::runtime_error("Opera core selected an unsupported video pixel format.");
+    }
     if (pitch < static_cast<std::size_t>(width) * bytesPerPixel) {
         throw std::runtime_error("Opera core reported an invalid video frame pitch.");
     }
@@ -705,45 +715,43 @@ void Application::onVideo(const void* data, const unsigned width, const unsigned
     }
     m_frame.width = width;
     m_frame.height = height;
-    m_frame.pixels.resize(static_cast<std::size_t>(width) * height);
+    m_frame.pixelFormat = m_pixelFormat;
+    const std::size_t rowSize = static_cast<std::size_t>(width) * bytesPerPixel;
+    m_frame.pixels.resize(rowSize * height);
     const auto* source = static_cast<const std::uint8_t*>(data);
     for (unsigned y = 0; y < height; ++y) {
-        const auto* row = source + static_cast<std::size_t>(y) * pitch;
-        for (unsigned x = 0; x < width; ++x) {
-            std::uint8_t red{}, green{}, blue{};
-            if (m_pixelFormat == libretro::Pixel0Rgb1555) {
-                std::uint16_t pixel{};
-                std::memcpy(&pixel, row + x * 2, sizeof(pixel));
-                red = static_cast<std::uint8_t>(((pixel >> 10U) & 31U) * 255U / 31U);
-                green = static_cast<std::uint8_t>(((pixel >> 5U) & 31U) * 255U / 31U);
-                blue = static_cast<std::uint8_t>((pixel & 31U) * 255U / 31U);
-            } else if (m_pixelFormat == libretro::PixelRgb565) {
-                std::uint16_t pixel{};
-                std::memcpy(&pixel, row + x * 2, sizeof(pixel));
-                red = static_cast<std::uint8_t>(((pixel >> 11U) & 31U) * 255U / 31U);
-                green = static_cast<std::uint8_t>(((pixel >> 5U) & 63U) * 255U / 63U);
-                blue = static_cast<std::uint8_t>((pixel & 31U) * 255U / 31U);
-            } else {
-                std::uint32_t pixel{};
-                std::memcpy(&pixel, row + x * 4, sizeof(pixel));
-                red = static_cast<std::uint8_t>((pixel >> 16U) & 0xFFU);
-                green = static_cast<std::uint8_t>((pixel >> 8U) & 0xFFU);
-                blue = static_cast<std::uint8_t>(pixel & 0xFFU);
-            }
-            m_frame.pixels[static_cast<std::size_t>(y) * width + x] =
-                0xFF000000U | (static_cast<std::uint32_t>(red) << 16U) |
-                (static_cast<std::uint32_t>(green) << 8U) | blue;
-        }
+        std::memcpy(m_frame.pixels.data() + static_cast<std::size_t>(y) * rowSize,
+                    source + static_cast<std::size_t>(y) * pitch, rowSize);
     }
     m_frame.dirty = true;
 }
 
 void Application::drawVideoFrame() {
     if (m_frame.width == 0 || m_frame.height == 0) return;
+    SDL_PixelFormat pixelFormat{};
+    unsigned bytesPerPixel{};
+    switch (m_frame.pixelFormat) {
+    case libretro::Pixel0Rgb1555:
+        pixelFormat = SDL_PIXELFORMAT_XRGB1555;
+        bytesPerPixel = 2;
+        break;
+    case libretro::PixelRgb565:
+        pixelFormat = SDL_PIXELFORMAT_RGB565;
+        bytesPerPixel = 2;
+        break;
+    case libretro::PixelXrgb8888:
+        pixelFormat = SDL_PIXELFORMAT_XRGB8888;
+        bytesPerPixel = 4;
+        break;
+    default:
+        setError("Opera core selected an unsupported video pixel format.");
+        return;
+    }
     if (!m_frameTexture || m_frameTextureWidth != static_cast<int>(m_frame.width) ||
-        m_frameTextureHeight != static_cast<int>(m_frame.height)) {
+        m_frameTextureHeight != static_cast<int>(m_frame.height) ||
+        m_frameTextureFormat != m_frame.pixelFormat) {
         if (m_frameTexture) SDL_DestroyTexture(m_frameTexture);
-        m_frameTexture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_ARGB8888,
+        m_frameTexture = SDL_CreateTexture(m_renderer, pixelFormat,
             SDL_TEXTUREACCESS_STREAMING, static_cast<int>(m_frame.width), static_cast<int>(m_frame.height));
         if (!m_frameTexture) {
             setError(std::string("Unable to create the game video texture: ") + SDL_GetError());
@@ -751,12 +759,13 @@ void Application::drawVideoFrame() {
         }
         m_frameTextureWidth = static_cast<int>(m_frame.width);
         m_frameTextureHeight = static_cast<int>(m_frame.height);
+        m_frameTextureFormat = m_frame.pixelFormat;
         SDL_SetTextureScaleMode(m_frameTexture,
             m_settings.scaleMode == "nearest" ? SDL_SCALEMODE_NEAREST : SDL_SCALEMODE_LINEAR);
     }
     if (m_frame.dirty) {
         if (!SDL_UpdateTexture(m_frameTexture, nullptr, m_frame.pixels.data(),
-                               static_cast<int>(m_frame.width * sizeof(std::uint32_t)))) {
+                               static_cast<int>(m_frame.width * bytesPerPixel))) {
             setError(std::string("Unable to upload the game video frame: ") + SDL_GetError());
             return;
         }

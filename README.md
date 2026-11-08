@@ -19,7 +19,10 @@ not launch RetroArch.
 - Automatically hides the settings window after a game loads; close or hide it
   at any time and press F2 to show it again.
 - Selects SDL's OpenGL or Vulkan renderer, nearest/linear scaling, VSync,
-  fullscreen, and a built-in CRT scanline presentation preset.
+  fullscreen, and a built-in CRT scanline presentation preset. On Windows,
+  the GPU preference can be set to system default, power-saving, or
+  high-performance; the choice is stored as a per-application Windows graphics
+  preference and takes effect after restarting the frontend.
 - Uses SDL audio with WASAPI selected by default, a system-default audio
   backend option, and adjustable output gain.
 - Persists settings under the current user's SDL preferences directory and

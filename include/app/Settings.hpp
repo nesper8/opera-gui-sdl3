@@ -11,6 +11,7 @@ inline constexpr std::size_t PadButtonCount = 16;
 
 struct Settings final {
     std::string videoDriver = "opengl";
+    std::string gpuPreference = "system";
     std::string scaleMode = "nearest";
     std::string shaderPreset = "none";
     bool vsync = true;

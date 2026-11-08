@@ -90,6 +90,8 @@ Settings Settings::load(const std::filesystem::path& file) {
 
         if (section == "video") {
             if (key == "driver" && (value == "opengl" || value == "vulkan")) result.videoDriver = value;
+            else if (key == "gpu" && (value == "system" || value == "power_saving" ||
+                                      value == "high_performance")) result.gpuPreference = value;
             else if (key == "scale" && (value == "nearest" || value == "linear")) result.scaleMode = value;
             else if (key == "shader" && (value == "none" || value == "crt")) result.shaderPreset = value;
             else if (key == "vsync") result.vsync = parseBool(value, result.vsync);
@@ -131,6 +133,7 @@ void Settings::save(const std::filesystem::path& file) const {
         if (!output) throw std::runtime_error("Unable to write settings file: " + temporary.string());
         output << "[video]\n"
                << "driver=" << videoDriver << '\n'
+               << "gpu=" << gpuPreference << '\n'
                << "scale=" << scaleMode << '\n'
                << "shader=" << shaderPreset << '\n'
                << "vsync=" << (vsync ? "true" : "false") << '\n'

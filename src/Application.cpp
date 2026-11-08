@@ -1,6 +1,7 @@
 #include "app/Application.hpp"
 
 #include "app/Logger.hpp"
+#include "app/WindowsGpuPreference.hpp"
 
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
@@ -407,6 +408,20 @@ void Application::drawInputSettings() {
 void Application::drawVideoSettings() {
     bool changed = selectableCombo("Video driver", m_settings.videoDriver,
         {{"opengl", "OpenGL"}, {"vulkan", "Vulkan"}});
+    const std::string previousGpuPreference = m_settings.gpuPreference;
+    const bool gpuPreferenceChanged = selectableCombo("GPU preference", m_settings.gpuPreference,
+        {{"system", "System default"}, {"power_saving", "Power saving GPU"},
+         {"high_performance", "High performance GPU"}});
+    if (gpuPreferenceChanged) {
+        try {
+            setWindowsGpuPreference(m_settings.gpuPreference);
+            saveSettings();
+            m_status = "GPU preference saved. Restart the application for it to take effect.";
+        } catch (const std::exception& error) {
+            m_settings.gpuPreference = previousGpuPreference;
+            setError(std::string("Unable to apply Windows GPU preference: ") + error.what());
+        }
+    }
     changed |= selectableCombo("Scaling", m_settings.scaleMode,
         {{"nearest", "Nearest (pixel sharp)"}, {"linear", "Linear"}});
     changed |= selectableCombo("Shader preset", m_settings.shaderPreset,
@@ -430,6 +445,7 @@ void Application::drawVideoSettings() {
         }
     }
     ImGui::TextWrapped("OpenGL or Vulkan is selected through SDL3's renderer backend. CRT scanlines are applied at presentation.");
+    ImGui::TextWrapped("GPU preference is stored in Windows per-app graphics settings and requires a restart. Windows or vendor driver settings may override it.");
 }
 
 void Application::drawAudioSettings() {

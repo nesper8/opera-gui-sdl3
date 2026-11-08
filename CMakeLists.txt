@@ -39,6 +39,7 @@ add_executable(opera_frontend
     src/LibretroCore.cpp
     src/Logger.cpp
     src/Settings.cpp
+    src/WindowsGpuPreference.cpp
     src/main.cpp
     "${imgui_SOURCE_DIR}/imgui.cpp"
     "${imgui_SOURCE_DIR}/imgui_draw.cpp"
@@ -51,7 +52,7 @@ add_executable(opera_frontend
 target_compile_features(opera_frontend PRIVATE cxx_std_20)
 target_compile_definitions(opera_frontend PRIVATE SDL_MAIN_HANDLED NOMINMAX WIN32_LEAN_AND_MEAN)
 target_include_directories(opera_frontend PRIVATE include "${imgui_SOURCE_DIR}" "${imgui_SOURCE_DIR}/backends")
-target_link_libraries(opera_frontend PRIVATE SDL3::SDL3 winhttp)
+target_link_libraries(opera_frontend PRIVATE SDL3::SDL3 winhttp advapi32)
 add_custom_command(TARGET opera_frontend POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "$<TARGET_FILE:SDL3::SDL3>"

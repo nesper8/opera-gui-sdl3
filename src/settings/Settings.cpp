@@ -111,7 +111,8 @@ Settings Settings::load(const std::filesystem::path& file) {
         }
 
         if (section == "video") {
-            if (key == "driver" && (value == "opengl" || value == "vulkan")) result.videoDriver = value;
+            if (key == "driver" && (value == "opengl" || value == "vulkan" ||
+                                    value == "direct3d12")) result.videoDriver = value;
             else if (key == "gpu" && (value == "system" || value == "power_saving" ||
                                       value == "high_performance")) result.gpuPreference = value;
             else if (key == "scale" && (value == "nearest" || value == "linear")) result.scaleMode = value;

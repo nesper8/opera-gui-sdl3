@@ -29,8 +29,14 @@ void FrontendRuntime::initialize(const Settings& settings, const std::string& im
     }
     m_sdlInitialized = true;
 
-    const SDL_WindowFlags apiFlag =
-        settings.videoDriver == "vulkan" ? SDL_WINDOW_VULKAN : SDL_WINDOW_OPENGL;
+    SDL_WindowFlags apiFlag{};
+    if (settings.videoDriver == "opengl") {
+        apiFlag = SDL_WINDOW_OPENGL;
+    } else if (settings.videoDriver == "vulkan") {
+        apiFlag = SDL_WINDOW_VULKAN;
+    } else if (settings.videoDriver != "direct3d12") {
+        throw std::invalid_argument("Unsupported video renderer: " + settings.videoDriver);
+    }
     m_window = SDL_CreateWindow("Opera SDL3 Frontend", 1100, 760,
                                 SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | apiFlag);
     if (!m_window) {

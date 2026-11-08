@@ -46,7 +46,7 @@ void testDefaultsAndRoundTrip() {
                     settings.keyboardBindings[0][14].empty() &&
                     settings.keyboardBindings[0][15].empty(),
                 "Extra, trigger, and stick-click controls must default to unbound.");
-        settings.videoDriver = "vulkan";
+        settings.videoDriver = "direct3d12";
         settings.gpuPreference = "high_performance";
         settings.showFpsCounter = true;
         settings.useDetectedBios = false;
@@ -67,7 +67,7 @@ void testDefaultsAndRoundTrip() {
         settings.save(file);
 
         const app::Settings loaded = app::Settings::load(file);
-        require(loaded.videoDriver == "vulkan", "Video driver did not persist.");
+        require(loaded.videoDriver == "direct3d12", "Direct3D 12 renderer did not persist.");
         require(loaded.gpuPreference == "high_performance", "GPU preference did not persist.");
         require(loaded.showFpsCounter, "FPS counter setting did not persist.");
         require(!loaded.useDetectedBios, "Optional BIOS setting did not persist.");

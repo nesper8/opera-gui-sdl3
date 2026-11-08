@@ -84,7 +84,7 @@ void Application::drawVideoSettings() {
     ImGui::TextDisabled("Video settings only.");
 
     bool changed = ui::selectableCombo("Video driver", m_settings.videoDriver,
-        {{"opengl", "OpenGL"}, {"vulkan", "Vulkan"}});
+        {{"opengl", "OpenGL"}, {"vulkan", "Vulkan"}, {"direct3d12", "Direct3D 12"}});
     const std::string previousGpuPreference = m_settings.gpuPreference;
     const bool gpuPreferenceChanged = ui::selectableCombo("GPU preference", m_settings.gpuPreference,
         {{"system", "System default"}, {"power_saving", "Power saving GPU"},
@@ -175,7 +175,7 @@ void Application::drawVideoSettings() {
             saveSettings();
         }
     }
-    ImGui::TextWrapped("OpenGL or Vulkan is selected through SDL3's renderer backend. CRT scanlines are applied at presentation.");
+    ImGui::TextWrapped("OpenGL, Vulkan, or Direct3D 12 is selected through SDL3's renderer backend. CRT scanlines are applied at presentation.");
     ImGui::TextWrapped("GPU preference is stored in Windows per-app graphics settings and requires a restart. Windows or vendor driver settings may override it.");
 }
 

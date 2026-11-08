@@ -25,8 +25,24 @@ void testDefaultsAndRoundTrip() {
         require(!settings.keyboardBindings[0][0].empty(), "Default keyboard bindings must be populated.");
         require(settings.gamepadBindings[0][0] == std::vector<int>{1} &&
                     settings.gamepadBindings[0][1] == std::vector<int>{0} &&
-                    settings.gamepadBindings[0][8] == std::vector<int>{2},
-                "Default gamepad bindings must match the 3DO B, A, and C labels.");
+                    settings.gamepadBindings[0][8] == std::vector<int>{3},
+                "Default face-button bindings must match the screenshot.");
+        require(settings.gamepadBindings[0][4] == std::vector<int>({11, -103}) &&
+                    settings.gamepadBindings[0][5] == std::vector<int>({12, -102}) &&
+                    settings.gamepadBindings[0][6] == std::vector<int>({13, -101}) &&
+                    settings.gamepadBindings[0][7] == std::vector<int>({14, -100}),
+                "Default D-pad bindings must include matching left-stick directions.");
+        require(settings.gamepadBindings[0][9].empty() &&
+                    settings.gamepadBindings[0][12].empty() &&
+                    settings.gamepadBindings[0][13].empty() &&
+                    settings.gamepadBindings[0][14].empty() &&
+                    settings.gamepadBindings[0][15].empty() &&
+                    settings.keyboardBindings[0][9].empty() &&
+                    settings.keyboardBindings[0][12].empty() &&
+                    settings.keyboardBindings[0][13].empty() &&
+                    settings.keyboardBindings[0][14].empty() &&
+                    settings.keyboardBindings[0][15].empty(),
+                "Extra, trigger, and stick-click controls must default to unbound.");
         settings.videoDriver = "vulkan";
         settings.gpuPreference = "high_performance";
         settings.showFpsCounter = true;

@@ -32,6 +32,8 @@ not launch RetroArch.
   the GPU preference can be set to system default, power-saving, or
   high-performance; the choice is stored as a per-application Windows graphics
   preference and takes effect after restarting the frontend.
+- Exposes the Opera core's 640x480 high-resolution framebuffer option in Video
+  settings when supported by the loaded core.
 - Uses SDL audio with WASAPI selected by default, a system-default audio
   backend option, selectable output device, configurable audio latency, and
   adjustable output gain. Playback stays at the core's native rate, and gain

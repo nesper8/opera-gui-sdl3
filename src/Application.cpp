@@ -577,9 +577,18 @@ void Application::drawInputSettings() {
 }
 
 void Application::drawVideoSettings() {
+    const CoreOption* highResolutionOption = nullptr;
+    if (m_core) {
+        const auto option = std::find_if(m_core->options().begin(), m_core->options().end(),
+            [](const CoreOption& item) { return item.key == "opera_high_resolution"; });
+        if (option != m_core->options().end()) highResolutionOption = &*option;
+    }
+
     if (ImGui::Button("Revert video settings to defaults")) {
         const Settings defaults = Settings::defaults();
         const Settings previousSettings = m_settings;
+        const std::string previousCoreResolution = highResolutionOption
+            ? highResolutionOption->currentValue : std::string{};
         try {
             setWindowsGpuPreference(defaults.gpuPreference);
             m_settings.videoDriver = defaults.videoDriver;
@@ -599,12 +608,25 @@ void Application::drawVideoSettings() {
                 m_settings.vsync = false;
                 throw std::runtime_error(std::string("Unable to restore VSync: ") + SDL_GetError());
             }
+            if (highResolutionOption) {
+                m_core->setOption(highResolutionOption->key, highResolutionOption->defaultValue);
+                m_settings.coreOptions[highResolutionOption->key] = highResolutionOption->defaultValue;
+            }
             saveSettings();
             if (m_error.empty()) {
                 m_status = "Video settings reverted. Restart to apply the video driver and GPU defaults.";
             }
         } catch (const std::exception& error) {
             m_settings = previousSettings;
+            if (highResolutionOption && highResolutionOption->currentValue != previousCoreResolution) {
+                try {
+                    m_core->setOption(highResolutionOption->key, previousCoreResolution);
+                } catch (const std::exception& restoreError) {
+                    Logger::write(LogLevel::Error,
+                        std::string("Unable to restore the previous internal resolution: ") +
+                        restoreError.what());
+                }
+            }
             if (!SDL_SetWindowFullscreen(m_window, previousSettings.fullscreen)) {
                 Logger::write(LogLevel::Error,
                     std::string("Unable to restore the previous window mode: ") + SDL_GetError());
@@ -652,6 +674,38 @@ void Application::drawVideoSettings() {
     changed |= selectableCombo("Shader preset", m_settings.shaderPreset,
         {{"none", "None"}, {"crt", "CRT scanlines"}});
     changed |= ImGui::Checkbox("Vertical sync", &m_settings.vsync);
+
+    if (highResolutionOption &&
+        std::find(highResolutionOption->values.begin(), highResolutionOption->values.end(), "disabled") !=
+            highResolutionOption->values.end() &&
+        std::find(highResolutionOption->values.begin(), highResolutionOption->values.end(), "enabled") !=
+            highResolutionOption->values.end()) {
+        bool highResolution = highResolutionOption->currentValue == "enabled";
+        if (ImGui::Checkbox("High resolution (640x480)", &highResolution)) {
+            const std::string previousValue = highResolutionOption->currentValue;
+            const std::string value = highResolution ? "enabled" : "disabled";
+            try {
+                m_core->setOption(highResolutionOption->key, value);
+                m_settings.coreOptions[highResolutionOption->key] = value;
+                saveSettings();
+                m_status = highResolution
+                    ? "Opera high-resolution mode enabled."
+                    : "Opera high-resolution mode disabled.";
+            } catch (const std::exception& error) {
+                try {
+                    m_core->setOption(highResolutionOption->key, previousValue);
+                } catch (const std::exception& restoreError) {
+                    Logger::write(LogLevel::Error,
+                        std::string("Unable to restore the previous internal resolution: ") +
+                        restoreError.what());
+                }
+                m_settings.coreOptions[highResolutionOption->key] = previousValue;
+                setError(std::string("Unable to change Opera internal resolution: ") + error.what());
+            }
+        }
+    } else if (!highResolutionOption) {
+        ImGui::TextDisabled("Load the Opera core to configure its internal resolution.");
+    }
 
     if (ImGui::Checkbox("Fullscreen (F11)", &m_settings.fullscreen)) {
         if (!SDL_SetWindowFullscreen(m_window, m_settings.fullscreen)) setError(SDL_GetError());

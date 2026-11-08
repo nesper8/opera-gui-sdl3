@@ -64,15 +64,19 @@ std::vector<int> parseIntegerList(const std::string& value, const int fallback) 
 Settings Settings::defaults() {
     Settings result;
     constexpr std::array<int, PadButtonCount> defaultKeys{
-        27, 29, 42, 40, 82, 81, 80, 79, 4, 22, 20, 26, 21, 23, 10, 11
+        27, 29, 42, 40, 82, 81, 80, 79, 4, 0, 20, 26, 0, 0, 0, 0
     };
-    constexpr std::array<int, PadButtonCount> defaultGamepad{
-        1, 0, 4, 6, 11, 12, 13, 14, 2, 3, 9, 10, -6, -7, 7, 8
+    const std::array<std::vector<int>, PadButtonCount> defaultGamepad{
+        std::vector<int>{1}, {0}, {4}, {6},
+        {11, -103}, {12, -102}, {13, -101}, {14, -100},
+        {3}, {}, {9}, {10}, {}, {}, {}, {}
     };
     for (std::size_t button = 0; button < PadButtonCount; ++button) {
         for (std::size_t player = 0; player < result.keyboardBindings.size(); ++player) {
-            result.keyboardBindings[player][button].push_back(defaultKeys[button]);
-            result.gamepadBindings[player][button].push_back(defaultGamepad[button]);
+            if (defaultKeys[button] != 0) {
+                result.keyboardBindings[player][button].push_back(defaultKeys[button]);
+            }
+            result.gamepadBindings[player][button] = defaultGamepad[button];
         }
     }
     return result;

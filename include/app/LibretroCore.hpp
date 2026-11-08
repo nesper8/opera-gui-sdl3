@@ -64,6 +64,7 @@ private:
     static std::size_t audioSampleBatch(const std::int16_t* data, std::size_t frames) noexcept;
     static void inputPoll() noexcept;
     static std::int16_t inputState(unsigned port, unsigned device, unsigned index, unsigned id) noexcept;
+    static void coreLog(int level, const char* format, ...) noexcept;
     void parseOptions(const libretro::Variable* variables);
     void parseCoreOptions(const libretro::CoreOptionDefinition* definitions);
 

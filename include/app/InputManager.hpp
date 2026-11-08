@@ -25,6 +25,10 @@ public:
     void refresh();
     std::vector<GamepadInfo> gamepads() const;
     void setKeyboardBinding(std::size_t player, std::size_t button, SDL_Scancode key);
+    void setGamepadButtonBinding(std::size_t player, std::size_t button, SDL_GamepadButton gamepadButton);
+    void setGamepadAxisBinding(std::size_t player, std::size_t button, SDL_GamepadAxis axis);
+    SDL_JoystickID selectedGamepadId(std::size_t player) const noexcept;
+    std::string gamepadBindingName(std::size_t player, std::size_t button) const;
     std::int16_t buttonState(unsigned player, unsigned button) const noexcept;
 
 private:

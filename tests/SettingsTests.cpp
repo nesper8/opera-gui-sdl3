@@ -23,6 +23,9 @@ void testDefaultsAndRoundTrip() {
         require(settings.videoDriver == "opengl", "OpenGL must be the default video driver.");
         require(settings.audioDriver == "wasapi", "WASAPI must be the default audio driver.");
         require(settings.keyboardBindings[0][0] != 0, "Default keyboard bindings must be populated.");
+        require(settings.gamepadBindings[0][0] == 1 && settings.gamepadBindings[0][1] == 0 &&
+                    settings.gamepadBindings[0][8] == 2,
+                "Default gamepad bindings must match the 3DO B, A, and C labels.");
         settings.videoDriver = "vulkan";
         settings.scaleMode = "linear";
         settings.shaderPreset = "crt";
@@ -30,6 +33,8 @@ void testDefaultsAndRoundTrip() {
         settings.audioGain = 0.75F;
         settings.gamepadGuids[1] = "test-guid#1";
         settings.keyboardBindings[1][app::PadButtonCount - 1] = 77;
+        settings.gamepadBindings[1][1] = 2;
+        settings.gamepadBindings[1][12] = -6;
         settings.coreOptions["opera_region"] = "NTSC";
         settings.save(file);
 
@@ -41,6 +46,8 @@ void testDefaultsAndRoundTrip() {
         require(loaded.audioGain == 0.75F, "Audio gain did not persist.");
         require(loaded.gamepadGuids[1] == "test-guid#1", "Gamepad selection did not persist.");
         require(loaded.keyboardBindings[1][app::PadButtonCount - 1] == 77, "Keyboard mapping did not persist.");
+        require(loaded.gamepadBindings[1][1] == 2, "Gamepad button mapping did not persist.");
+        require(loaded.gamepadBindings[1][12] == -6, "Gamepad trigger mapping did not persist.");
         require(loaded.coreOptions.at("opera_region") == "NTSC", "Core option did not persist.");
 
         {

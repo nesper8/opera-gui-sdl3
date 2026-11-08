@@ -82,6 +82,7 @@ Application::Application() {
     m_coreDirectory = m_baseDirectory / "cores";
     m_systemDirectory = m_preferencesDirectory / "system";
     m_saveDirectory = m_preferencesDirectory / "saves";
+    m_imguiIniFile = pathToUtf8(m_preferencesDirectory / "imgui.ini");
     std::filesystem::create_directories(m_systemDirectory);
     std::filesystem::create_directories(m_saveDirectory);
 
@@ -177,6 +178,7 @@ void Application::initialize() {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     m_imguiContext = true;
+    ImGui::GetIO().IniFilename = m_imguiIniFile.c_str();
     ImGui::StyleColorsDark();
     if (!ImGui_ImplSDL3_InitForSDLRenderer(m_window, m_renderer)) {
         throw std::runtime_error("Unable to initialize the Dear ImGui SDL3 platform backend.");
@@ -201,16 +203,36 @@ void Application::initialize() {
 
 void Application::handleEvent(const SDL_Event& event) {
     ImGui_ImplSDL3_ProcessEvent(&event);
-    if (m_captureBinding && event.type == SDL_EVENT_KEY_DOWN) {
-        if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
-            m_captureBinding.reset();
-            m_status = "Keyboard remapping cancelled.";
-        } else {
-            m_input->setKeyboardBinding(m_captureBinding->first, m_captureBinding->second, event.key.scancode);
-            m_captureBinding.reset();
-            saveSettings();
-            m_status = "Keyboard binding updated.";
-        }
+    if (m_captureBinding && event.type == SDL_EVENT_KEY_DOWN &&
+        event.key.scancode == SDL_SCANCODE_ESCAPE) {
+        m_captureBinding.reset();
+        m_status = "Binding cancelled.";
+    } else if (m_captureBinding && !m_captureBinding->gamepad &&
+               event.type == SDL_EVENT_KEY_DOWN) {
+        m_input->setKeyboardBinding(m_captureBinding->player, m_captureBinding->button,
+                                    event.key.scancode);
+        m_captureBinding.reset();
+        saveSettings();
+        m_status = "Keyboard binding updated.";
+    } else if (m_captureBinding && m_captureBinding->gamepad &&
+               event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN &&
+               event.gbutton.which == m_input->selectedGamepadId(m_captureBinding->player)) {
+        m_input->setGamepadButtonBinding(m_captureBinding->player, m_captureBinding->button,
+            static_cast<SDL_GamepadButton>(event.gbutton.button));
+        m_captureBinding.reset();
+        saveSettings();
+        m_status = "Gamepad binding updated.";
+    } else if (m_captureBinding && m_captureBinding->gamepad &&
+               event.type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
+               event.gaxis.which == m_input->selectedGamepadId(m_captureBinding->player) &&
+               event.gaxis.value > 16000 &&
+               (event.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER ||
+                event.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)) {
+        m_input->setGamepadAxisBinding(m_captureBinding->player, m_captureBinding->button,
+                                       static_cast<SDL_GamepadAxis>(event.gaxis.axis));
+        m_captureBinding.reset();
+        saveSettings();
+        m_status = "Gamepad trigger binding updated.";
     }
     if (event.type == SDL_EVENT_QUIT) {
         m_running = false;
@@ -220,6 +242,9 @@ void Application::handleEvent(const SDL_Event& event) {
         } catch (const std::exception& error) {
             setError(error.what());
         }
+    } else if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_F2 && !event.key.repeat) {
+        m_uiVisible = !m_uiVisible;
+        m_captureBinding.reset();
     } else if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_F11 && !event.key.repeat) {
         m_settings.fullscreen = !m_settings.fullscreen;
         if (!SDL_SetWindowFullscreen(m_window, m_settings.fullscreen)) setError(SDL_GetError());
@@ -232,7 +257,10 @@ void Application::handleEvent(const SDL_Event& event) {
 void Application::drawInterface() {
     ImGui::SetNextWindowPos(ImVec2(12, 12), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(510, 690), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Opera - 3DO", nullptr, ImGuiWindowFlags_NoCollapse);
+    if (!ImGui::Begin("Opera - 3DO", &m_uiVisible, ImGuiWindowFlags_NoCollapse)) {
+        ImGui::End();
+        return;
+    }
 
     ImGui::TextWrapped("%s", m_coreName.empty() ? "Opera core is not loaded." : m_coreName.c_str());
     if (!m_gamePath.empty()) ImGui::TextWrapped("Game: %s", m_gamePath.c_str());
@@ -243,6 +271,11 @@ void Application::drawInterface() {
     if (m_core && m_core->gameLoaded()) {
         ImGui::SameLine();
         if (ImGui::Button("Reset (F1)")) m_core->reset();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Hide menu (F2)")) {
+        m_uiVisible = false;
+        m_captureBinding.reset();
     }
     ImGui::Separator();
 
@@ -276,12 +309,14 @@ void Application::drawInterface() {
     ImGui::End();
 }
 
-const std::array<const char*, PadButtonCount>& Application::buttonNames() {
-    static constexpr std::array<const char*, PadButtonCount> names{
-        "B", "Y", "Select", "Start", "Up", "Down", "Left", "Right",
-        "A", "X", "L", "R", "L2", "R2", "L3", "R3"
+const std::array<Application::PadControl, PadButtonCount>& Application::padControls() {
+    static constexpr std::array<PadControl, PadButtonCount> controls{
+        PadControl{"D-pad Up", 4}, {"D-pad Down", 5}, {"D-pad Left", 6}, {"D-pad Right", 7},
+        {"A", 1}, {"B", 0}, {"C", 8}, {"L", 10}, {"R", 11},
+        {"Select (X)", 2}, {"Start (P)", 3}, {"Extra X", 9},
+        {"L2", 12}, {"R2", 13}, {"L3", 14}, {"R3", 15}
     };
-    return names;
+    return controls;
 }
 
 void Application::drawInputSettings() {
@@ -322,20 +357,50 @@ void Application::drawInputSettings() {
         saveSettings();
     }
 
-    ImGui::SeparatorText("Keyboard mapping");
-    ImGui::TextUnformatted("Select a button, then press the key to bind it (Esc cancels).");
-    for (std::size_t button = 0; button < PadButtonCount; ++button) {
-        const auto key = static_cast<SDL_Scancode>(m_settings.keyboardBindings[m_selectedPlayer][button]);
-        const char* keyName = SDL_GetScancodeName(key);
-        ImGui::PushID(static_cast<int>(button));
-        if (ImGui::Button(m_captureBinding && m_captureBinding->first == m_selectedPlayer &&
-                              m_captureBinding->second == button
-                              ? "Press a key..." : (keyName && *keyName ? keyName : "Unbound"))) {
-            m_captureBinding = std::pair{m_selectedPlayer, button};
+    ImGui::SeparatorText("3DO controls");
+    ImGui::TextUnformatted("Click a binding, then press a key or controller button. Esc cancels.");
+    if (ImGui::BeginTable("controller-bindings", 3,
+                          ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg |
+                          ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("3DO button", ImGuiTableColumnFlags_WidthStretch, 1.0F);
+        ImGui::TableSetupColumn("Keyboard", ImGuiTableColumnFlags_WidthStretch, 1.0F);
+        ImGui::TableSetupColumn("Gamepad", ImGuiTableColumnFlags_WidthStretch, 1.0F);
+        ImGui::TableHeadersRow();
+
+        for (const PadControl& control : padControls()) {
+            const std::size_t button = control.retroId;
+            ImGui::TableNextRow();
+            ImGui::PushID(static_cast<int>(m_selectedPlayer * PadButtonCount + button));
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted(control.name);
+
+            ImGui::TableSetColumnIndex(1);
+            const auto key = static_cast<SDL_Scancode>(m_settings.keyboardBindings[m_selectedPlayer][button]);
+            const char* keyName = SDL_GetScancodeName(key);
+            const bool capturingKey = m_captureBinding && !m_captureBinding->gamepad &&
+                m_captureBinding->player == m_selectedPlayer && m_captureBinding->button == button;
+            if (ImGui::Button(capturingKey ? "Press key..." :
+                              (keyName && *keyName ? keyName : "Unbound"), ImVec2(-1, 0))) {
+                m_captureBinding = BindingCapture{m_selectedPlayer, button, false};
+            }
+
+            ImGui::TableSetColumnIndex(2);
+            const SDL_JoystickID gamepadId = m_input->selectedGamepadId(m_selectedPlayer);
+            const bool capturingGamepad = m_captureBinding && m_captureBinding->gamepad &&
+                m_captureBinding->player == m_selectedPlayer && m_captureBinding->button == button;
+            const std::string bindingName = m_input->gamepadBindingName(m_selectedPlayer, button);
+            ImGui::BeginDisabled(gamepadId == 0);
+            if (ImGui::Button(capturingGamepad ? "Press button..." : bindingName.c_str(),
+                              ImVec2(-1, 0))) {
+                m_captureBinding = BindingCapture{m_selectedPlayer, button, true};
+            }
+            ImGui::EndDisabled();
+            ImGui::PopID();
         }
-        ImGui::SameLine();
-        ImGui::TextUnformatted(buttonNames()[button]);
-        ImGui::PopID();
+        ImGui::EndTable();
+    }
+    if (m_input->selectedGamepadId(m_selectedPlayer) == 0) {
+        ImGui::TextWrapped("Select a connected gamepad above to remap its controls.");
     }
 }
 
@@ -418,7 +483,12 @@ void Application::render() {
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
-    drawInterface();
+    if (m_uiVisible) {
+        drawInterface();
+    } else {
+        ImGui::GetForegroundDrawList()->AddText(ImVec2(12, 12), IM_COL32(220, 220, 220, 180),
+                                                "F2: Show menu");
+    }
     ImGui::Render();
 
     SDL_SetRenderDrawColor(m_renderer, 12, 14, 18, 255);
@@ -466,6 +536,8 @@ void Application::loadGame(const std::filesystem::path& path) {
     m_gamePath = path.string();
     m_status = "Running " + path.filename().string() + ".";
     m_error.clear();
+    m_uiVisible = false;
+    m_captureBinding.reset();
 }
 
 void Application::loadCore() {

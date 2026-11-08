@@ -30,11 +30,14 @@ struct CoreOptionsIntl {
     CoreOptionDefinition* us;
     CoreOptionDefinition* local;
 };
+using LogPrintf = void (*)(int, const char*, ...);
+struct LogCallback { LogPrintf log; };
 
 enum Environment : unsigned {
     SetRotation = 1,
     GetOverscan = 2,
     GetCanDupe = 3,
+    GetLogInterface = 27,
     SetMessage = 6,
     Shutdown = 7,
     SetPerformanceLevel = 8,
@@ -49,6 +52,7 @@ enum Environment : unsigned {
     GetVariableUpdate = 17,
     SetSupportNoGame = 18,
     GetSaveDirectory = 31,
+    GetCoreAssetsDirectory = 30,
     SetSupportAchievements = 42,
     GetLanguage = 39,
     SetCoreOptionsVersion = 52,

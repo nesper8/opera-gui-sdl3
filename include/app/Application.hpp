@@ -37,6 +37,17 @@ private:
         bool dirty{};
     };
 
+    struct BindingCapture final {
+        std::size_t player{};
+        std::size_t button{};
+        bool gamepad{};
+    };
+
+    struct PadControl final {
+        const char* name;
+        unsigned retroId;
+    };
+
     static void fileDialogCallback(void* userdata, const char* const* filelist, int filter);
     void initialize();
     void handleEvent(const SDL_Event& event);
@@ -55,7 +66,7 @@ private:
     void setError(const std::string& message);
     void onVideo(const void* data, unsigned width, unsigned height, std::size_t pitch);
     void drawVideoFrame();
-    static const std::array<const char*, PadButtonCount>& buttonNames();
+    static const std::array<PadControl, PadButtonCount>& padControls();
 
     std::filesystem::path m_baseDirectory;
     std::filesystem::path m_preferencesDirectory;
@@ -63,6 +74,7 @@ private:
     std::filesystem::path m_coreDirectory;
     std::filesystem::path m_systemDirectory;
     std::filesystem::path m_saveDirectory;
+    std::string m_imguiIniFile;
     Settings m_settings;
     SDL_Window* m_window{};
     SDL_Renderer* m_renderer{};
@@ -73,6 +85,7 @@ private:
     bool m_running{true};
     bool m_sdlInitialized{};
     bool m_vsyncActive{};
+    bool m_uiVisible{true};
     bool m_imguiContext{};
     bool m_imguiPlatformInitialized{};
     bool m_imguiRendererInitialized{};
@@ -85,7 +98,7 @@ private:
     std::unique_ptr<AudioOutput> m_audio;
     std::unique_ptr<LibretroCore> m_core;
     std::future<std::filesystem::path> m_download;
-    std::optional<std::pair<std::size_t, std::size_t>> m_captureBinding;
+    std::optional<BindingCapture> m_captureBinding;
     std::optional<std::filesystem::path> m_pendingGame;
     std::size_t m_selectedPlayer{};
 };

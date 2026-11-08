@@ -50,8 +50,13 @@ Settings Settings::defaults() {
     constexpr std::array<int, PadButtonCount> defaultKeys{
         27, 29, 42, 40, 82, 81, 80, 79, 4, 22, 20, 26, 21, 23, 10, 11
     };
+    constexpr std::array<int, PadButtonCount> defaultGamepad{
+        1, 0, 4, 6, 11, 12, 13, 14, 2, 3, 9, 10, -6, -7, 7, 8
+    };
     result.keyboardBindings[0] = defaultKeys;
     result.keyboardBindings[1] = defaultKeys;
+    result.gamepadBindings[0] = defaultGamepad;
+    result.gamepadBindings[1] = defaultGamepad;
     return result;
 }
 
@@ -95,12 +100,18 @@ Settings Settings::load(const std::filesystem::path& file) {
         } else if (section == "input") {
             if (key == "player1_guid") result.gamepadGuids[0] = value;
             else if (key == "player2_guid") result.gamepadGuids[1] = value;
-            else if (key.starts_with("player1_key_") || key.starts_with("player2_key_")) {
+            else if (key.starts_with("player1_key_") || key.starts_with("player2_key_") ||
+                     key.starts_with("player1_pad_") || key.starts_with("player2_pad_")) {
                 const std::size_t player = key.starts_with("player1_") ? 0U : 1U;
+                const bool gamepad = key.starts_with("player1_pad_") || key.starts_with("player2_pad_");
                 const auto buttonText = std::string_view(key).substr(12);
                 const int button = parseInteger(std::string(buttonText), -1);
                 if (button >= 0 && static_cast<std::size_t>(button) < PadButtonCount) {
-                    result.keyboardBindings[player][static_cast<std::size_t>(button)] = parseInteger(value, 0);
+                    if (gamepad) {
+                        result.gamepadBindings[player][static_cast<std::size_t>(button)] = parseInteger(value, -1);
+                    } else {
+                        result.keyboardBindings[player][static_cast<std::size_t>(button)] = parseInteger(value, 0);
+                    }
                 }
             }
         } else if (section == "core") {
@@ -134,6 +145,8 @@ void Settings::save(const std::filesystem::path& file) const {
             for (std::size_t button = 0; button < PadButtonCount; ++button) {
                 output << "player" << (player + 1) << "_key_" << button << '='
                        << keyboardBindings[player][button] << '\n';
+                output << "player" << (player + 1) << "_pad_" << button << '='
+                       << gamepadBindings[player][button] << '\n';
             }
         }
         output << "\n[core]\n";

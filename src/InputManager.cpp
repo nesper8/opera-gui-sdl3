@@ -10,15 +10,6 @@
 namespace app {
 namespace {
 
-constexpr std::array<SDL_GamepadButton, PadButtonCount> gamepadButtons{
-    SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_NORTH, SDL_GAMEPAD_BUTTON_BACK,
-    SDL_GAMEPAD_BUTTON_START, SDL_GAMEPAD_BUTTON_DPAD_UP, SDL_GAMEPAD_BUTTON_DPAD_DOWN,
-    SDL_GAMEPAD_BUTTON_DPAD_LEFT, SDL_GAMEPAD_BUTTON_DPAD_RIGHT, SDL_GAMEPAD_BUTTON_SOUTH,
-    SDL_GAMEPAD_BUTTON_WEST, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER,
-    SDL_GAMEPAD_BUTTON_INVALID, SDL_GAMEPAD_BUTTON_INVALID, SDL_GAMEPAD_BUTTON_LEFT_STICK,
-    SDL_GAMEPAD_BUTTON_RIGHT_STICK
-};
-
 } // namespace
 
 InputManager::InputManager(Settings& settings) : m_settings(settings) {}
@@ -83,15 +74,89 @@ void InputManager::setKeyboardBinding(const std::size_t player, const std::size_
     m_settings.keyboardBindings[player][button] = static_cast<int>(key);
 }
 
+void InputManager::setGamepadButtonBinding(const std::size_t player, const std::size_t button,
+                                           const SDL_GamepadButton gamepadButton) {
+    if (player >= m_settings.gamepadBindings.size() || button >= PadButtonCount ||
+        gamepadButton < 0 || gamepadButton >= SDL_GAMEPAD_BUTTON_COUNT) {
+        throw std::out_of_range("Gamepad button binding is outside the supported range.");
+    }
+    m_settings.gamepadBindings[player][button] = static_cast<int>(gamepadButton);
+}
+
+void InputManager::setGamepadAxisBinding(const std::size_t player, const std::size_t button,
+                                         const SDL_GamepadAxis axis) {
+    if (player >= m_settings.gamepadBindings.size() || button >= PadButtonCount ||
+        axis < SDL_GAMEPAD_AXIS_LEFT_TRIGGER || axis > SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {
+        throw std::out_of_range("Only gamepad trigger axes can be bound to digital buttons.");
+    }
+    m_settings.gamepadBindings[player][button] = -static_cast<int>(axis) - 2;
+}
+
+SDL_JoystickID InputManager::selectedGamepadId(const std::size_t player) const noexcept {
+    if (player >= m_selectedGamepads.size() || !m_selectedGamepads[player]) return 0;
+    return SDL_GetGamepadID(m_selectedGamepads[player]);
+}
+
+std::string InputManager::gamepadBindingName(const std::size_t player, const std::size_t button) const {
+    if (player >= m_settings.gamepadBindings.size() || button >= PadButtonCount) return "Unbound";
+    const int binding = m_settings.gamepadBindings[player][button];
+    if (binding >= 0 && binding < SDL_GAMEPAD_BUTTON_COUNT) {
+        const auto label = m_selectedGamepads[player]
+            ? SDL_GetGamepadButtonLabel(m_selectedGamepads[player],
+                                        static_cast<SDL_GamepadButton>(binding))
+            : SDL_GetGamepadButtonLabelForType(SDL_GAMEPAD_TYPE_XBOX360,
+                                               static_cast<SDL_GamepadButton>(binding));
+        switch (label) {
+        case SDL_GAMEPAD_BUTTON_LABEL_A: return "A";
+        case SDL_GAMEPAD_BUTTON_LABEL_B: return "B";
+        case SDL_GAMEPAD_BUTTON_LABEL_X: return "X";
+        case SDL_GAMEPAD_BUTTON_LABEL_Y: return "Y";
+        case SDL_GAMEPAD_BUTTON_LABEL_CROSS: return "Cross";
+        case SDL_GAMEPAD_BUTTON_LABEL_CIRCLE: return "Circle";
+        case SDL_GAMEPAD_BUTTON_LABEL_SQUARE: return "Square";
+        case SDL_GAMEPAD_BUTTON_LABEL_TRIANGLE: return "Triangle";
+        default: break;
+        }
+        switch (static_cast<SDL_GamepadButton>(binding)) {
+        case SDL_GAMEPAD_BUTTON_BACK: return "Back";
+        case SDL_GAMEPAD_BUTTON_START: return "Start";
+        case SDL_GAMEPAD_BUTTON_LEFT_STICK: return "L3";
+        case SDL_GAMEPAD_BUTTON_RIGHT_STICK: return "R3";
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return "LB";
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return "RB";
+        case SDL_GAMEPAD_BUTTON_DPAD_UP: return "D-pad Up";
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return "D-pad Down";
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT: return "D-pad Left";
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return "D-pad Right";
+        default: {
+            const char* name = SDL_GetGamepadStringForButton(static_cast<SDL_GamepadButton>(binding));
+            return name ? name : "Unknown";
+        }
+        }
+    }
+    if (binding <= -2) {
+        const int axis = -binding - 2;
+        if (axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER) return "Left Trigger";
+        if (axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) return "Right Trigger";
+    }
+    return "Unbound";
+}
+
 std::int16_t InputManager::buttonState(const unsigned player, const unsigned button) const noexcept {
     if (player >= m_settings.keyboardBindings.size() || button >= PadButtonCount) return 0;
     const std::size_t playerIndex = static_cast<std::size_t>(player);
 
     if (SDL_Gamepad* gamepad = m_selectedGamepads[playerIndex]) {
-        if (gamepadButtons[button] != SDL_GAMEPAD_BUTTON_INVALID &&
-            SDL_GetGamepadButton(gamepad, gamepadButtons[button])) return 1;
-        if (button == 12 && SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 16000) return 1;
-        if (button == 13 && SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16000) return 1;
+        const int binding = m_settings.gamepadBindings[playerIndex][button];
+        if (binding >= 0 && binding < SDL_GAMEPAD_BUTTON_COUNT) {
+            return SDL_GetGamepadButton(gamepad, static_cast<SDL_GamepadButton>(binding)) ? 1 : 0;
+        }
+        if (binding <= -2) {
+            const int axis = -binding - 2;
+            if (axis >= SDL_GAMEPAD_AXIS_LEFT_TRIGGER && axis <= SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {
+                return SDL_GetGamepadAxis(gamepad, static_cast<SDL_GamepadAxis>(axis)) > 16000 ? 1 : 0;
+            }
+        }
         return 0;
     }
 

@@ -6,8 +6,10 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdarg>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <stdexcept>
 #include <string_view>
 
@@ -137,9 +139,11 @@ void LibretroCore::load(const std::filesystem::path& coreFile) {
         m_setAudioSampleBatch(&LibretroCore::audioSampleBatch);
         m_setInputPoll(&LibretroCore::inputPoll);
         m_setInputState(&LibretroCore::inputState);
+        Logger::write(LogLevel::Info, "Initializing Opera core.");
         m_init();
         m_initialized = true;
 
+        Logger::write(LogLevel::Info, "Reading Opera core metadata.");
         SystemInfo info{};
         m_getSystemInfo(&info);
         m_coreName = info.library_name ? info.library_name : "Opera";
@@ -292,11 +296,18 @@ bool LibretroCore::environment(const unsigned command, void* data) noexcept {
             break;
         case GetVariable: {
             auto* variable = static_cast<Variable*>(data);
-            if (!variable || !variable->key) break;
-            const auto found = self->m_variables.find(variable->key);
-            if (found != self->m_variables.end()) {
-                variable->value = found->second.c_str();
-                result = true;
+            result = true;
+            if (variable) {
+                variable->value = nullptr;
+                if (variable->key) {
+                    const auto found = self->m_variables.find(variable->key);
+                    if (found != self->m_variables.end()) {
+                        variable->value = found->second.c_str();
+                    } else {
+                        Logger::write(LogLevel::Warning,
+                            std::string("Opera core requested an undefined option: ") + variable->key);
+                    }
+                }
             }
             break;
         }
@@ -314,7 +325,14 @@ bool LibretroCore::environment(const unsigned command, void* data) noexcept {
             if (data) *static_cast<unsigned*>(data) = 2;
             result = data != nullptr;
             break;
+        case GetLogInterface:
+            if (data) {
+                static_cast<LogCallback*>(data)->log = &LibretroCore::coreLog;
+                result = true;
+            }
+            break;
         case GetSystemDirectoryPath:
+        case GetCoreAssetsDirectory:
             if (data) {
                 static thread_local std::string path;
                 path = utf8Path(self->m_systemDirectory);
@@ -350,6 +368,24 @@ bool LibretroCore::environment(const unsigned command, void* data) noexcept {
         if (self->m_callbacks.error) self->m_callbacks.error(error);
     });
     return result;
+}
+
+void LibretroCore::coreLog(const int level, const char* format, ...) noexcept {
+    if (!format) return;
+    std::array<char, 2048> buffer{};
+    std::va_list arguments;
+    va_start(arguments, format);
+    const int written = std::vsnprintf(buffer.data(), buffer.size(), format, arguments);
+    va_end(arguments);
+    if (written < 0) {
+        Logger::write(LogLevel::Error, "Opera core emitted an invalid log message.");
+        return;
+    }
+
+    LogLevel logLevel = LogLevel::Info;
+    if (level >= 3) logLevel = LogLevel::Error;
+    else if (level == 2) logLevel = LogLevel::Warning;
+    Logger::write(logLevel, std::string("Opera core: ") + buffer.data());
 }
 
 void LibretroCore::videoRefresh(const void* data, const unsigned width, const unsigned height,

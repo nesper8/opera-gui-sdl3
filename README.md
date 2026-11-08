@@ -12,8 +12,12 @@ not launch RetroArch.
   with legacy option fallback in the settings window.
 - Opens CHD, ISO, CUE, and BIN images using SDL's native file dialog.
 - Routes the two emulated joypads independently to an SDL gamepad (including
-  XInput controllers) or remappable keyboard controls. Identical gamepads are
-  distinguished by their enumeration order.
+  XInput controllers) or remappable keyboard controls. Bindings are captured
+  from connected controllers or the keyboard and displayed in 3DO order:
+  D-pad, A/B/C, L/R, Select, and Start. Identical gamepads are distinguished
+  by their enumeration order.
+- Automatically hides the settings window after a game loads; close or hide it
+  at any time and press F2 to show it again.
 - Selects SDL's OpenGL or Vulkan renderer, nearest/linear scaling, VSync,
   fullscreen, and a built-in CRT scanline presentation preset.
 - Uses SDL audio with WASAPI selected by default, a system-default audio
@@ -39,6 +43,11 @@ cmake -S . -B build -G Ninja
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
+
+The standard tests run offline. To additionally test downloading and extracting
+the current Opera core, configure with
+`-DOPERA_ENABLE_DOWNLOAD_INTEGRATION_TEST=ON`; that test requires network access
+to the libretro buildbot.
 
 Run `build/opera_frontend.exe` (the build copies `SDL3.dll` beside it), download
 the core from the launch window, then open a game image. The Core tab shows the

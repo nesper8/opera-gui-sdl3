@@ -9,6 +9,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace app {
@@ -17,6 +18,29 @@ namespace {
 constexpr wchar_t CoreUrl[] =
     L"https://buildbot.libretro.com/nightly/windows/x86_64/latest/opera_libretro.dll.zip";
 constexpr std::uint64_t MaxArchiveBytes = 128ULL * 1024ULL * 1024ULL;
+
+std::string windowsError(const std::string_view operation, const DWORD error) {
+    LPWSTR message = nullptr;
+    const DWORD length = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, error, 0,
+            reinterpret_cast<LPWSTR>(&message), 0, nullptr);
+    std::string result = std::string(operation) + " (Windows error " + std::to_string(error);
+    if (length > 0 && message) {
+        const int utf8Length = WideCharToMultiByte(CP_UTF8, 0, message, static_cast<int>(length),
+                                                    nullptr, 0, nullptr, nullptr);
+        if (utf8Length > 0) {
+            std::string details(static_cast<std::size_t>(utf8Length), '\0');
+            WideCharToMultiByte(CP_UTF8, 0, message, static_cast<int>(length),
+                                details.data(), utf8Length, nullptr, nullptr);
+            while (!details.empty() && (details.back() == '\r' || details.back() == '\n')) {
+                details.pop_back();
+            }
+            result += ": " + details;
+        }
+        LocalFree(message);
+    }
+    return result + ").";
+}
 
 class InternetHandle final {
 public:
@@ -74,7 +98,9 @@ void downloadZip(const std::filesystem::path& outputFile) {
     InternetHandle session(WinHttpOpen(L"Opera SDL3 Frontend/0.1",
         WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0));
     if (!session.get()) throw std::runtime_error("Unable to initialize the Windows HTTPS client.");
-    WinHttpSetTimeouts(session.get(), 15000, 15000, 30000, 30000);
+    if (!WinHttpSetTimeouts(session.get(), 15000, 15000, 30000, 30000)) {
+        throw std::runtime_error(windowsError("Unable to set HTTPS timeouts", GetLastError()));
+    }
 
     URL_COMPONENTS parts{};
     parts.dwStructSize = sizeof(parts);
@@ -85,17 +111,26 @@ void downloadZip(const std::filesystem::path& outputFile) {
     if (!WinHttpCrackUrl(CoreUrl, 0, 0, &parts)) {
         throw std::runtime_error("Unable to parse the Opera core download URL.");
     }
-    InternetHandle connection(WinHttpConnect(session.get(), parts.lpszHostName, parts.nPort, 0));
-    if (!connection.get()) throw std::runtime_error("Unable to connect to the libretro build server.");
+    const std::wstring host(parts.lpszHostName, parts.dwHostNameLength);
+    InternetHandle connection(WinHttpConnect(session.get(), host.c_str(), parts.nPort, 0));
+    if (!connection.get()) {
+        throw std::runtime_error(windowsError("Unable to connect to the libretro build server",
+                                              GetLastError()));
+    }
     std::wstring resource(parts.lpszUrlPath, parts.dwUrlPathLength);
     if (parts.dwExtraInfoLength > 0) resource.append(parts.lpszExtraInfo, parts.dwExtraInfoLength);
     const DWORD flags = parts.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0;
     InternetHandle request(WinHttpOpenRequest(connection.get(), L"GET", resource.c_str(),
         nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, flags));
-    if (!request.get() || !WinHttpSendRequest(request.get(), WINHTTP_NO_ADDITIONAL_HEADERS, 0,
-            WINHTTP_NO_REQUEST_DATA, 0, 0, 0) || !WinHttpReceiveResponse(request.get(), nullptr)) {
-        throw std::runtime_error("The Opera core download request failed (Windows error " +
-                                 std::to_string(GetLastError()) + ").");
+    if (!request.get()) {
+        throw std::runtime_error(windowsError("Unable to create the Opera core HTTPS request", GetLastError()));
+    }
+    if (!WinHttpSendRequest(request.get(), WINHTTP_NO_ADDITIONAL_HEADERS, 0,
+            WINHTTP_NO_REQUEST_DATA, 0, 0, 0)) {
+        throw std::runtime_error(windowsError("Unable to send the Opera core HTTPS request", GetLastError()));
+    }
+    if (!WinHttpReceiveResponse(request.get(), nullptr)) {
+        throw std::runtime_error(windowsError("Unable to receive the Opera core HTTPS response", GetLastError()));
     }
 
     DWORD status = 0;

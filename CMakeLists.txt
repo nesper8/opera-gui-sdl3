@@ -65,6 +65,7 @@ else()
 endif()
 
 include(CTest)
+option(OPERA_ENABLE_DOWNLOAD_INTEGRATION_TEST "Enable the network-dependent core download test" OFF)
 if(BUILD_TESTING)
     add_executable(settings_tests tests/SettingsTests.cpp src/Settings.cpp)
     target_compile_features(settings_tests PRIVATE cxx_std_20)
@@ -75,4 +76,24 @@ if(BUILD_TESTING)
         target_compile_options(settings_tests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME settings_tests COMMAND settings_tests)
+
+    if(OPERA_ENABLE_DOWNLOAD_INTEGRATION_TEST)
+        add_executable(core_downloader_tests
+            tests/CoreDownloaderTests.cpp
+            src/CoreDownloader.cpp
+            src/LibretroCore.cpp
+            src/Logger.cpp
+        )
+        target_compile_features(core_downloader_tests PRIVATE cxx_std_20)
+        target_compile_definitions(core_downloader_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+        target_include_directories(core_downloader_tests PRIVATE include)
+        target_link_libraries(core_downloader_tests PRIVATE winhttp)
+        if(MSVC)
+            target_compile_options(core_downloader_tests PRIVATE /W4 /permissive- /EHsc)
+        else()
+            target_compile_options(core_downloader_tests PRIVATE -Wall -Wextra -Wpedantic)
+        endif()
+        add_test(NAME core_downloader_tests COMMAND core_downloader_tests)
+        set_tests_properties(core_downloader_tests PROPERTIES TIMEOUT 180)
+    endif()
 endif()

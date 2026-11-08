@@ -19,6 +19,7 @@ struct Settings final {
     float audioGain = 1.0F;
     std::array<std::string, 2> gamepadGuids{};
     std::array<std::array<int, PadButtonCount>, 2> keyboardBindings{};
+    std::array<std::array<int, PadButtonCount>, 2> gamepadBindings{};
     std::map<std::string, std::string> coreOptions;
 
     static Settings defaults();

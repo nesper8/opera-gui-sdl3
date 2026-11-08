@@ -225,6 +225,11 @@ void Application::initialize() {
 
     m_input = std::make_unique<InputManager>(m_settings);
     m_input->refresh();
+    try {
+        m_audioDevices = AudioOutput::playbackDevices();
+    } catch (const std::exception& error) {
+        setError(error.what());
+    }
     m_audio = std::make_unique<AudioOutput>(m_settings);
     if (std::filesystem::exists(m_coreDirectory / "opera_libretro.dll")) {
         try {
@@ -274,6 +279,13 @@ void Application::handleEvent(const SDL_Event& event) {
     } else if (event.type == SDL_EVENT_GAMEPAD_ADDED || event.type == SDL_EVENT_GAMEPAD_REMOVED) {
         try {
             m_input->refresh();
+        } catch (const std::exception& error) {
+            setError(error.what());
+        }
+    } else if (event.type == SDL_EVENT_AUDIO_DEVICE_ADDED ||
+               event.type == SDL_EVENT_AUDIO_DEVICE_REMOVED) {
+        try {
+            m_audioDevices = AudioOutput::playbackDevices();
         } catch (const std::exception& error) {
             setError(error.what());
         }
@@ -495,17 +507,68 @@ void Application::drawVideoSettings() {
 }
 
 void Application::drawAudioSettings() {
-    bool changed = selectableCombo("Audio driver", m_settings.audioDriver,
+    const bool driverChanged = selectableCombo("Audio driver", m_settings.audioDriver,
         {{"wasapi", "WASAPI"}, {"default", "SDL default"}});
+    bool outputChanged = false;
+    const std::string previousDevice = m_settings.audioDevice;
+    {
+        const char* selectedDevice = m_settings.audioDevice.empty()
+            ? "System default" : m_settings.audioDevice.c_str();
+        if (ImGui::BeginCombo("Output device", selectedDevice)) {
+            if (ImGui::Selectable("System default", m_settings.audioDevice.empty())) {
+                m_settings.audioDevice.clear();
+                outputChanged = true;
+            }
+            for (const AudioDeviceInfo& device : m_audioDevices) {
+                const bool selected = m_settings.audioDevice == device.name;
+                if (ImGui::Selectable(device.name.c_str(), selected)) {
+                    m_settings.audioDevice = device.name;
+                    outputChanged = true;
+                }
+                if (selected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+    }
+
+    const int previousLatency = m_settings.audioLatencyMs;
+    const bool latencyChanged = ImGui::SliderInt(
+        "Audio latency (ms)", &m_settings.audioLatencyMs, 16, 200);
+    if (latencyChanged) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(lower latency, higher stutter risk)");
+    }
+
+    const bool rateControlChanged = ImGui::Checkbox(
+        "Audio rate control (stretch)", &m_settings.audioRateControl);
     if (ImGui::SliderFloat("Output gain", &m_settings.audioGain, 0.0F, 2.0F, "%.2f")) {
         if (m_audio) m_audio->setGain(m_settings.audioGain);
-        changed = true;
-    }
-    if (changed) {
         saveSettings();
-        m_status = "Restart the application to apply an audio driver change.";
     }
-    ImGui::TextWrapped("WASAPI is the default output. SDL converts the Opera core's stereo PCM stream to the selected device.");
+
+    if (outputChanged || latencyChanged) {
+        if (m_core && m_core->gameLoaded()) {
+            try {
+                m_audio->configure(m_core->sampleRate());
+            } catch (const std::exception& error) {
+                m_settings.audioDevice = previousDevice;
+                m_settings.audioLatencyMs = previousLatency;
+                setError(std::string("Unable to reconfigure audio output: ") + error.what());
+            }
+        }
+        saveSettings();
+        if (m_error.empty()) m_status = "Audio output settings applied.";
+    }
+    if (rateControlChanged) {
+        if (m_audio) m_audio->setRateControl(m_settings.audioRateControl);
+        saveSettings();
+    }
+    if (driverChanged) {
+        saveSettings();
+        m_status = "Restart the application to apply the audio driver change.";
+    }
+    ImGui::TextWrapped("Audio rate control gently adjusts playback speed and pitch to keep the audio queue near the selected latency, helping prevent underruns.");
+    ImGui::TextWrapped("The requested device buffer size is a hint; SDL and the audio driver may choose a different effective latency.");
 }
 
 void Application::drawPerformanceSettings() {
@@ -617,8 +680,7 @@ void Application::render() {
 
 void Application::openGameDialog() {
     static constexpr SDL_DialogFileFilter filters[]{
-        {"3DO games", "chd;iso;cue;bin"},
-        {"CHD disc images", "chd"},
+        {"3DO games", "iso;cue;bin"},
         {"ISO disc images", "iso"},
         {"BIN/CUE disc images", "cue;bin"}
     };
@@ -645,8 +707,8 @@ void Application::loadGame(const std::filesystem::path& path) {
     std::string extension = path.extension().string();
     std::transform(extension.begin(), extension.end(), extension.begin(),
                    [](const unsigned char character) { return static_cast<char>(std::tolower(character)); });
-    if (extension != ".chd" && extension != ".iso" && extension != ".cue" && extension != ".bin") {
-        throw std::invalid_argument("Choose a CHD, ISO, CUE, or BIN game image.");
+    if (extension != ".iso" && extension != ".cue" && extension != ".bin") {
+        throw std::invalid_argument("Choose an ISO, CUE, or BIN game image.");
     }
     m_core->loadGame(path);
     m_audio->configure(m_core->sampleRate());
@@ -682,7 +744,7 @@ void Application::loadCore() {
     }
     m_core = std::move(core);
     m_coreName = coreName;
-    m_status = "Opera core loaded. Choose a CHD, ISO, CUE, or BIN image.";
+    m_status = "Opera core loaded. Choose an ISO, CUE, or BIN image.";
     m_error.clear();
 }
 

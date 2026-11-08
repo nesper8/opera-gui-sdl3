@@ -10,7 +10,8 @@ not launch RetroArch.
   only after extraction succeeds.
 - Loads the DLL through the libretro API and exposes version-1 core options
   with legacy option fallback in the settings window.
-- Opens CHD, ISO, CUE, and BIN images using SDL's native file dialog.
+- Opens ISO and BIN/CUE images using SDL's native file dialog. CHD loading is
+  temporarily unavailable.
 - Routes the two emulated joypads independently to an SDL gamepad (including
   XInput controllers) or remappable keyboard controls. Bindings are captured
   from connected controllers or the keyboard and displayed in 3DO order:
@@ -27,7 +28,11 @@ not launch RetroArch.
   high-performance; the choice is stored as a per-application Windows graphics
   preference and takes effect after restarting the frontend.
 - Uses SDL audio with WASAPI selected by default, a system-default audio
-  backend option, and adjustable output gain.
+  backend option, selectable output device, configurable audio latency and
+  adaptive audio rate control (stretch), plus adjustable output gain.
+  Rate control makes small pitch-changing playback-rate adjustments to keep the
+  audio queue stable. Audio latency is a requested SDL buffer size; the audio
+  backend may choose a different effective value.
 - Detects supported 3DO BIOS filenames in the application's `bios` directory
   and uses that directory as the core system directory when enabled. Detection
   is optional; when no BIOS is found, the existing user system directory is used.
@@ -37,10 +42,10 @@ not launch RetroArch.
 The initial CRT preset is a scanline overlay, not a programmable shader chain;
 loading arbitrary RetroArch `.glsl`, `.slang`, or `.preset` shaders is not yet
 supported.
-CHD files do not include copyrighted firmware. Any BIOS files must be legally
-obtained by the user. When BIOS detection is enabled, place a supported BIOS
-file in `bios` beside the application; the Core tab shows the detected file and
-active system directory. Changing this option requires restarting the app.
+Any BIOS files must be legally obtained by the user. When BIOS detection is
+enabled, place a supported BIOS file in `bios` beside the application; the Core
+tab shows the detected file and active system directory. Changing this option
+requires restarting the app.
 
 ## Build
 
@@ -61,8 +66,9 @@ the current Opera core, configure with
 to the libretro buildbot.
 
 Run `build/opera_frontend.exe` (the build copies `SDL3.dll` beside it), download
-the core from the launch window, then open a game image. The Core tab shows the
-system and save directories. BIN/CUE sets should be opened through their `.cue` file.
+the core from the launch window, then open an ISO or BIN/CUE game image. The
+Core tab shows the system and save directories. BIN/CUE sets should be opened
+through their `.cue` file.
 Changing the video or audio backend requires restarting the application.
 
 ## Layout

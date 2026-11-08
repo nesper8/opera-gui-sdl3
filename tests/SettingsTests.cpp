@@ -33,6 +33,9 @@ void testDefaultsAndRoundTrip() {
         settings.scaleMode = "linear";
         settings.shaderPreset = "crt";
         settings.audioDriver = "default";
+        settings.audioDevice = "Test speakers";
+        settings.audioLatencyMs = 120;
+        settings.audioRateControl = false;
         settings.audioGain = 0.75F;
         settings.gamepadGuids[1] = "test-guid#1";
         settings.keyboardBindings[1][app::PadButtonCount - 1] = 77;
@@ -49,6 +52,9 @@ void testDefaultsAndRoundTrip() {
         require(loaded.scaleMode == "linear", "Scale mode did not persist.");
         require(loaded.shaderPreset == "crt", "Shader preset did not persist.");
         require(loaded.audioDriver == "default", "Audio driver did not persist.");
+        require(loaded.audioDevice == "Test speakers", "Audio output device did not persist.");
+        require(loaded.audioLatencyMs == 120, "Audio latency did not persist.");
+        require(!loaded.audioRateControl, "Audio rate control setting did not persist.");
         require(loaded.audioGain == 0.75F, "Audio gain did not persist.");
         require(loaded.gamepadGuids[1] == "test-guid#1", "Gamepad selection did not persist.");
         require(loaded.keyboardBindings[1][app::PadButtonCount - 1] == 77, "Keyboard mapping did not persist.");
@@ -59,6 +65,7 @@ void testDefaultsAndRoundTrip() {
         {
             std::ofstream output(file, std::ios::trunc);
             output << "[video]\ndriver=unknown\ngpu=unknown\n[audio]\ngain=nan\n"
+                      "latency_ms=999\nrate_control=invalid\n"
                       "[performance]\nfps_counter=invalid\n"
                       "[system]\nuse_detected_bios=invalid\n";
         }
@@ -68,6 +75,8 @@ void testDefaultsAndRoundTrip() {
         require(!sanitized.showFpsCounter, "Invalid FPS counter setting must fall back to disabled.");
         require(sanitized.useDetectedBios, "Invalid BIOS setting must fall back to enabled.");
         require(sanitized.audioGain == 1.0F, "Non-finite gain must fall back to its default.");
+        require(sanitized.audioLatencyMs == 200, "Audio latency must be clamped to the supported range.");
+        require(sanitized.audioRateControl, "Invalid audio rate control setting must fall back to enabled.");
     } catch (...) {
         std::error_code ignored;
         std::filesystem::remove_all(directory, ignored);

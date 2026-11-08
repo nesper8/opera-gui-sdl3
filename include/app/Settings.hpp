@@ -19,6 +19,9 @@ struct Settings final {
     bool showFpsCounter = false;
     bool useDetectedBios = true;
     std::string audioDriver = "wasapi";
+    std::string audioDevice;
+    int audioLatencyMs = 80;
+    bool audioRateControl = true;
     float audioGain = 1.0F;
     std::array<std::string, 2> gamepadGuids{};
     std::array<std::array<int, PadButtonCount>, 2> keyboardBindings{};

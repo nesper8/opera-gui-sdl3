@@ -106,6 +106,7 @@ private:
     VideoFrame m_frame;
     std::unique_ptr<InputManager> m_input;
     std::unique_ptr<AudioOutput> m_audio;
+    std::vector<AudioDeviceInfo> m_audioDevices;
     std::unique_ptr<LibretroCore> m_core;
     std::future<std::filesystem::path> m_download;
     std::optional<BindingCapture> m_captureBinding;

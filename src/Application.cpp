@@ -1,0 +1,652 @@
+#include "app/Application.hpp"
+
+#include "app/Logger.hpp"
+
+#include <imgui.h>
+#include <imgui_impl_sdl3.h>
+#include <imgui_impl_sdlrenderer3.h>
+
+#include <windows.h>
+
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <cctype>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <exception>
+#include <limits>
+#include <stdexcept>
+#include <thread>
+#include <utility>
+
+namespace app {
+namespace {
+
+std::filesystem::path pathFromUtf8(const char* value) {
+    if (!value) throw std::invalid_argument("Cannot create a path from a null UTF-8 string.");
+    const int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value, -1, nullptr, 0);
+    if (length <= 0) throw std::runtime_error("SDL returned a path that is not valid UTF-8.");
+    std::wstring wide(static_cast<std::size_t>(length), L'\0');
+    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value, -1,
+                            wide.data(), length) != length) {
+        throw std::runtime_error("Unable to convert an SDL path from UTF-8.");
+    }
+    wide.pop_back();
+    return std::filesystem::path(std::move(wide));
+}
+
+std::string pathToUtf8(const std::filesystem::path& path) {
+    const std::u8string value = path.u8string();
+    std::string result;
+    result.reserve(value.size());
+    for (const char8_t byte : value) result.push_back(static_cast<char>(byte));
+    return result;
+}
+
+bool selectableCombo(const char* label, std::string& value,
+                     const std::vector<std::pair<const char*, const char*>>& choices) {
+    bool changed = false;
+    if (ImGui::BeginCombo(label, value.c_str())) {
+        for (const auto& [id, name] : choices) {
+            const bool selected = value == id;
+            if (ImGui::Selectable(name, selected)) {
+                value = id;
+                changed = true;
+            }
+            if (selected) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    return changed;
+}
+
+const char* playerName(const std::size_t player) {
+    return player == 0 ? "Player 1" : "Player 2";
+}
+
+} // namespace
+
+Application::Application() {
+    const char* basePath = SDL_GetBasePath();
+    if (!basePath) throw std::runtime_error(std::string("Unable to locate the application directory: ") + SDL_GetError());
+    m_baseDirectory = pathFromUtf8(basePath);
+    SDL_free(const_cast<char*>(basePath));
+
+    const char* preferencesPath = SDL_GetPrefPath("Opera", "OperaSDL3Frontend");
+    if (!preferencesPath) throw std::runtime_error(std::string("Unable to locate the settings directory: ") + SDL_GetError());
+    m_preferencesDirectory = pathFromUtf8(preferencesPath);
+    SDL_free(const_cast<char*>(preferencesPath));
+    m_settingsFile = m_preferencesDirectory / "settings.ini";
+    m_coreDirectory = m_baseDirectory / "cores";
+    m_systemDirectory = m_preferencesDirectory / "system";
+    m_saveDirectory = m_preferencesDirectory / "saves";
+    std::filesystem::create_directories(m_systemDirectory);
+    std::filesystem::create_directories(m_saveDirectory);
+
+    Logger::initialize(m_preferencesDirectory / "opera-frontend.log");
+    m_settings = Settings::load(m_settingsFile);
+}
+
+Application::~Application() {
+    try {
+        saveSettings();
+    } catch (const std::exception& error) {
+        Logger::write(LogLevel::Error, std::string("Unable to save settings during shutdown: ") + error.what());
+    }
+    if (m_imguiRendererInitialized) ImGui_ImplSDLRenderer3_Shutdown();
+    if (m_imguiPlatformInitialized) ImGui_ImplSDL3_Shutdown();
+    if (m_imguiContext) {
+        ImGui::DestroyContext();
+    }
+    m_core.reset();
+    m_audio.reset();
+    m_input.reset();
+    if (m_frameTexture) SDL_DestroyTexture(m_frameTexture);
+    if (m_renderer) SDL_DestroyRenderer(m_renderer);
+    if (m_window) SDL_DestroyWindow(m_window);
+    if (m_sdlInitialized) SDL_Quit();
+}
+
+int Application::run() {
+    initialize();
+    using Clock = std::chrono::steady_clock;
+    auto nextCoreFrame = Clock::now();
+    while (m_running) {
+        SDL_Event event{};
+        while (SDL_PollEvent(&event)) handleEvent(event);
+        checkDownload();
+        if (m_pendingGame) {
+            const auto selectedGame = std::move(*m_pendingGame);
+            m_pendingGame.reset();
+            try {
+                loadGame(selectedGame);
+            } catch (const std::exception& error) {
+                setError(error.what());
+            }
+        }
+        if (m_core && m_core->gameLoaded()) {
+            const auto now = Clock::now();
+            const auto frameDuration = std::chrono::duration<double>(1.0 / m_core->frameRate());
+            if (now >= nextCoreFrame) {
+                m_core->run();
+                nextCoreFrame = now + std::chrono::duration_cast<Clock::duration>(frameDuration);
+            }
+        } else {
+            nextCoreFrame = Clock::now();
+        }
+        render();
+        if (m_core && m_core->gameLoaded() && !m_vsyncActive) {
+            std::this_thread::sleep_until(nextCoreFrame);
+        } else if ((!m_core || !m_core->gameLoaded()) && !m_vsyncActive) {
+            SDL_Delay(16);
+        }
+    }
+    return 0;
+}
+
+void Application::initialize() {
+    if (m_settings.audioDriver == "wasapi") SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "wasapi");
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
+        m_sdlInitialized = true;
+        throw std::runtime_error(std::string("Unable to initialize SDL3: ") + SDL_GetError());
+    }
+    m_sdlInitialized = true;
+
+    const SDL_WindowFlags apiFlag = m_settings.videoDriver == "vulkan" ? SDL_WINDOW_VULKAN : SDL_WINDOW_OPENGL;
+    m_window = SDL_CreateWindow("Opera SDL3 Frontend", 1100, 760,
+                                SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | apiFlag);
+    if (!m_window) throw std::runtime_error(std::string("Unable to create the SDL window: ") + SDL_GetError());
+
+    const char* driver = m_settings.videoDriver.c_str();
+    m_renderer = SDL_CreateRenderer(m_window, driver);
+    if (!m_renderer) {
+        throw std::runtime_error(std::string("Unable to create the ") + driver +
+                                 " video renderer: " + SDL_GetError());
+    }
+    m_vsyncActive = SDL_SetRenderVSync(m_renderer, m_settings.vsync ? 1 : 0);
+    if (!m_vsyncActive) {
+        m_settings.vsync = false;
+        Logger::write(LogLevel::Warning, std::string("VSync could not be configured: ") + SDL_GetError());
+    }
+    if (m_settings.fullscreen && !SDL_SetWindowFullscreen(m_window, true)) {
+        Logger::write(LogLevel::Warning, std::string("Fullscreen could not be enabled: ") + SDL_GetError());
+    }
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    m_imguiContext = true;
+    ImGui::StyleColorsDark();
+    if (!ImGui_ImplSDL3_InitForSDLRenderer(m_window, m_renderer)) {
+        throw std::runtime_error("Unable to initialize the Dear ImGui SDL3 platform backend.");
+    }
+    m_imguiPlatformInitialized = true;
+    if (!ImGui_ImplSDLRenderer3_Init(m_renderer)) {
+        throw std::runtime_error("Unable to initialize the Dear ImGui SDL renderer backend.");
+    }
+    m_imguiRendererInitialized = true;
+
+    m_input = std::make_unique<InputManager>(m_settings);
+    m_input->refresh();
+    m_audio = std::make_unique<AudioOutput>(m_settings);
+    if (std::filesystem::exists(m_coreDirectory / "opera_libretro.dll")) {
+        try {
+            loadCore();
+        } catch (const std::exception& error) {
+            setError(error.what());
+        }
+    }
+}
+
+void Application::handleEvent(const SDL_Event& event) {
+    ImGui_ImplSDL3_ProcessEvent(&event);
+    if (m_captureBinding && event.type == SDL_EVENT_KEY_DOWN) {
+        if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
+            m_captureBinding.reset();
+            m_status = "Keyboard remapping cancelled.";
+        } else {
+            m_input->setKeyboardBinding(m_captureBinding->first, m_captureBinding->second, event.key.scancode);
+            m_captureBinding.reset();
+            saveSettings();
+            m_status = "Keyboard binding updated.";
+        }
+    }
+    if (event.type == SDL_EVENT_QUIT) {
+        m_running = false;
+    } else if (event.type == SDL_EVENT_GAMEPAD_ADDED || event.type == SDL_EVENT_GAMEPAD_REMOVED) {
+        try {
+            m_input->refresh();
+        } catch (const std::exception& error) {
+            setError(error.what());
+        }
+    } else if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_F11 && !event.key.repeat) {
+        m_settings.fullscreen = !m_settings.fullscreen;
+        if (!SDL_SetWindowFullscreen(m_window, m_settings.fullscreen)) setError(SDL_GetError());
+        saveSettings();
+    } else if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_F1 && !event.key.repeat) {
+        if (m_core) m_core->reset();
+    }
+}
+
+void Application::drawInterface() {
+    ImGui::SetNextWindowPos(ImVec2(12, 12), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(510, 690), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Opera - 3DO", nullptr, ImGuiWindowFlags_NoCollapse);
+
+    ImGui::TextWrapped("%s", m_coreName.empty() ? "Opera core is not loaded." : m_coreName.c_str());
+    if (!m_gamePath.empty()) ImGui::TextWrapped("Game: %s", m_gamePath.c_str());
+
+    if (ImGui::Button("Open game...")) openGameDialog();
+    ImGui::SameLine();
+    if (ImGui::Button("Download Opera core")) requestCoreDownload();
+    if (m_core && m_core->gameLoaded()) {
+        ImGui::SameLine();
+        if (ImGui::Button("Reset (F1)")) m_core->reset();
+    }
+    ImGui::Separator();
+
+    if (ImGui::BeginTabBar("settings-tabs")) {
+        if (ImGui::BeginTabItem("Input")) {
+            drawInputSettings();
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Video")) {
+            drawVideoSettings();
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Audio")) {
+            drawAudioSettings();
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Core")) {
+            drawCoreSettings();
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
+
+    ImGui::Separator();
+    ImGui::TextWrapped("%s", m_status.c_str());
+    if (!m_error.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0F, 0.35F, 0.3F, 1.0F));
+        ImGui::TextWrapped("%s", m_error.c_str());
+        ImGui::PopStyleColor();
+    }
+    ImGui::End();
+}
+
+const std::array<const char*, PadButtonCount>& Application::buttonNames() {
+    static constexpr std::array<const char*, PadButtonCount> names{
+        "B", "Y", "Select", "Start", "Up", "Down", "Left", "Right",
+        "A", "X", "L", "R", "L2", "R2", "L3", "R3"
+    };
+    return names;
+}
+
+void Application::drawInputSettings() {
+    if (ImGui::BeginCombo("Player", playerName(m_selectedPlayer))) {
+        for (std::size_t player = 0; player < 2; ++player) {
+            const bool selected = m_selectedPlayer == player;
+            if (ImGui::Selectable(playerName(player), selected)) m_selectedPlayer = player;
+            if (selected) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+
+    std::string selected = m_settings.gamepadGuids[m_selectedPlayer];
+    bool changed = false;
+    if (ImGui::BeginCombo("Device", selected.empty() ? "Keyboard" : selected.c_str())) {
+        if (ImGui::Selectable("Keyboard", selected.empty())) {
+            selected.clear();
+            changed = true;
+        }
+        for (const auto& device : m_input->gamepads()) {
+            const std::string label = device.name + " (" + device.key + ")";
+            const bool active = selected == device.key;
+            if (ImGui::Selectable(label.c_str(), active)) {
+                selected = device.key;
+                changed = true;
+            }
+            if (active) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    if (changed) {
+        m_settings.gamepadGuids[m_selectedPlayer] = selected;
+        try {
+            m_input->refresh();
+        } catch (const std::exception& error) {
+            setError(error.what());
+        }
+        saveSettings();
+    }
+
+    ImGui::SeparatorText("Keyboard mapping");
+    ImGui::TextUnformatted("Select a button, then press the key to bind it (Esc cancels).");
+    for (std::size_t button = 0; button < PadButtonCount; ++button) {
+        const auto key = static_cast<SDL_Scancode>(m_settings.keyboardBindings[m_selectedPlayer][button]);
+        const char* keyName = SDL_GetScancodeName(key);
+        ImGui::PushID(static_cast<int>(button));
+        if (ImGui::Button(m_captureBinding && m_captureBinding->first == m_selectedPlayer &&
+                              m_captureBinding->second == button
+                              ? "Press a key..." : (keyName && *keyName ? keyName : "Unbound"))) {
+            m_captureBinding = std::pair{m_selectedPlayer, button};
+        }
+        ImGui::SameLine();
+        ImGui::TextUnformatted(buttonNames()[button]);
+        ImGui::PopID();
+    }
+}
+
+void Application::drawVideoSettings() {
+    bool changed = selectableCombo("Video driver", m_settings.videoDriver,
+        {{"opengl", "OpenGL"}, {"vulkan", "Vulkan"}});
+    changed |= selectableCombo("Scaling", m_settings.scaleMode,
+        {{"nearest", "Nearest (pixel sharp)"}, {"linear", "Linear"}});
+    changed |= selectableCombo("Shader preset", m_settings.shaderPreset,
+        {{"none", "None"}, {"crt", "CRT scanlines"}});
+    changed |= ImGui::Checkbox("Vertical sync", &m_settings.vsync);
+
+    if (ImGui::Checkbox("Fullscreen (F11)", &m_settings.fullscreen)) {
+        if (!SDL_SetWindowFullscreen(m_window, m_settings.fullscreen)) setError(SDL_GetError());
+        changed = true;
+    }
+    if (changed) {
+        saveSettings();
+        m_status = "Restart the application to apply a video driver change.";
+        if (m_frameTexture) SDL_SetTextureScaleMode(m_frameTexture,
+            m_settings.scaleMode == "nearest" ? SDL_SCALEMODE_NEAREST : SDL_SCALEMODE_LINEAR);
+        m_vsyncActive = SDL_SetRenderVSync(m_renderer, m_settings.vsync ? 1 : 0);
+        if (!m_vsyncActive) {
+            m_settings.vsync = false;
+            setError(std::string("VSync change failed: ") + SDL_GetError());
+            saveSettings();
+        }
+    }
+    ImGui::TextWrapped("OpenGL or Vulkan is selected through SDL3's renderer backend. CRT scanlines are applied at presentation.");
+}
+
+void Application::drawAudioSettings() {
+    bool changed = selectableCombo("Audio driver", m_settings.audioDriver,
+        {{"wasapi", "WASAPI"}, {"default", "SDL default"}});
+    if (ImGui::SliderFloat("Output gain", &m_settings.audioGain, 0.0F, 2.0F, "%.2f")) {
+        if (m_audio) m_audio->setGain(m_settings.audioGain);
+        changed = true;
+    }
+    if (changed) {
+        saveSettings();
+        m_status = "Restart the application to apply an audio driver change.";
+    }
+    ImGui::TextWrapped("WASAPI is the default output. SDL converts the Opera core's stereo PCM stream to the selected device.");
+}
+
+void Application::drawCoreSettings() {
+    const std::string systemDirectory = pathToUtf8(m_systemDirectory);
+    const std::string saveDirectory = pathToUtf8(m_saveDirectory);
+    ImGui::TextWrapped("System files: %s", systemDirectory.c_str());
+    ImGui::TextWrapped("Save files: %s", saveDirectory.c_str());
+    if (!m_core) {
+        ImGui::TextWrapped("Install opera_libretro.dll to configure the Opera core.");
+        return;
+    }
+    ImGui::Text("%s", m_coreName.c_str());
+    if (!m_core->gameLoaded()) ImGui::TextUnformatted("Load a game to begin emulation.");
+    for (const auto& option : m_core->options()) {
+        if (option.values.empty()) continue;
+        int selected = 0;
+        const auto current = std::find(option.values.begin(), option.values.end(), option.currentValue);
+        if (current != option.values.end()) selected = static_cast<int>(std::distance(option.values.begin(), current));
+        std::vector<const char*> labels;
+        labels.reserve(option.values.size());
+        for (const auto& value : option.values) labels.push_back(value.c_str());
+        ImGui::PushID(option.key.c_str());
+        if (ImGui::Combo(option.description.c_str(), &selected, labels.data(), static_cast<int>(labels.size()))) {
+            try {
+                m_core->setOption(option.key, option.values[static_cast<std::size_t>(selected)]);
+                m_settings.coreOptions[option.key] = option.values[static_cast<std::size_t>(selected)];
+                saveSettings();
+            } catch (const std::exception& error) {
+                setError(error.what());
+            }
+        }
+        ImGui::PopID();
+    }
+}
+
+void Application::render() {
+    ImGui_ImplSDLRenderer3_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+    drawInterface();
+    ImGui::Render();
+
+    SDL_SetRenderDrawColor(m_renderer, 12, 14, 18, 255);
+    SDL_RenderClear(m_renderer);
+    drawVideoFrame();
+    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), m_renderer);
+    SDL_RenderPresent(m_renderer);
+}
+
+void Application::openGameDialog() {
+    static constexpr SDL_DialogFileFilter filters[]{
+        {"3DO games", "chd;iso;cue;bin"},
+        {"CHD disc images", "chd"},
+        {"ISO disc images", "iso"},
+        {"BIN/CUE disc images", "cue;bin"}
+    };
+    SDL_ShowOpenFileDialog(&Application::fileDialogCallback, this, m_window,
+                           filters, static_cast<int>(std::size(filters)), nullptr, false);
+}
+
+void Application::fileDialogCallback(void* userdata, const char* const* filelist, int) {
+    auto* self = static_cast<Application*>(userdata);
+    if (!self || !filelist || !filelist[0]) return;
+    try {
+        self->m_pendingGame = pathFromUtf8(filelist[0]);
+    } catch (const std::exception& error) {
+        self->setError(error.what());
+    } catch (...) {
+        self->setError("The selected game path could not be read.");
+    }
+}
+
+void Application::loadGame(const std::filesystem::path& path) {
+    if (!m_core) loadCore();
+    m_gamePath.clear();
+    m_frame = {};
+    std::string extension = path.extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(),
+                   [](const unsigned char character) { return static_cast<char>(std::tolower(character)); });
+    if (extension != ".chd" && extension != ".iso" && extension != ".cue" && extension != ".bin") {
+        throw std::invalid_argument("Choose a CHD, ISO, CUE, or BIN game image.");
+    }
+    m_core->loadGame(path);
+    m_audio->configure(m_core->sampleRate());
+    m_gamePath = path.string();
+    m_status = "Running " + path.filename().string() + ".";
+    m_error.clear();
+}
+
+void Application::loadCore() {
+    auto core = std::make_unique<LibretroCore>(m_systemDirectory, m_saveDirectory, CoreCallbacks{
+        [this](const void* data, const unsigned width, const unsigned height, const std::size_t pitch) {
+            onVideo(data, width, height, pitch);
+        },
+        [this](const unsigned format) { m_pixelFormat = format; },
+        [this](const std::int16_t* data, const std::size_t frames) { m_audio->submit(data, frames); },
+        [] { SDL_PumpEvents(); },
+        [this](const unsigned player, const unsigned button) { return m_input->buttonState(player, button); },
+        [] {},
+        [this](const std::string& error) { setError(error); }
+    });
+    core->load(m_coreDirectory / "opera_libretro.dll");
+    const std::string coreName = core->coreName();
+    for (const auto& option : core->options()) {
+        const auto saved = m_settings.coreOptions.find(option.key);
+        if (saved != m_settings.coreOptions.end() &&
+            std::find(option.values.begin(), option.values.end(), saved->second) != option.values.end()) {
+            core->setOption(option.key, saved->second);
+        } else if (!option.values.empty()) {
+            m_settings.coreOptions[option.key] = option.currentValue;
+        }
+    }
+    m_core = std::move(core);
+    m_coreName = coreName;
+    m_status = "Opera core loaded. Choose a CHD, ISO, CUE, or BIN image.";
+    m_error.clear();
+}
+
+void Application::checkDownload() {
+    if (!m_download.valid() || m_download.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
+    try {
+        const auto installed = m_download.get();
+        m_status = "Opera core installed to " + installed.string();
+        m_error.clear();
+        loadCore();
+    } catch (const std::exception& error) {
+        setError(error.what());
+    }
+}
+
+void Application::requestCoreDownload() {
+    if (m_download.valid() && m_download.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+        return;
+    }
+    if (m_core) {
+        m_core.reset();
+        m_coreName.clear();
+        m_gamePath.clear();
+        m_frame = {};
+    }
+    m_status = "Downloading and extracting the Opera core...";
+    m_error.clear();
+    m_download = std::async(std::launch::async, [directory = m_coreDirectory] {
+        return CoreDownloader{}.downloadAndExtract(directory);
+    });
+}
+
+void Application::saveSettings() {
+    try {
+        m_settings.save(m_settingsFile);
+    } catch (const std::exception& error) {
+        setError(std::string("Unable to save settings: ") + error.what());
+    }
+}
+
+void Application::setError(const std::string& message) {
+    m_error = message;
+    m_status = "An error occurred.";
+    Logger::write(LogLevel::Error, message);
+}
+
+void Application::onVideo(const void* data, const unsigned width, const unsigned height,
+                          const std::size_t pitch) {
+    if (!data) return;
+    constexpr unsigned MaxDimension = 4096;
+    if (width == 0 || height == 0 || width > MaxDimension || height > MaxDimension) {
+        throw std::runtime_error("Opera core reported invalid video dimensions.");
+    }
+    if (static_cast<std::size_t>(width) * height > 16U * 1024U * 1024U) {
+        throw std::runtime_error("Opera core reported an oversized video frame.");
+    }
+    const unsigned bytesPerPixel = m_pixelFormat == libretro::Pixel0Rgb1555 ||
+        m_pixelFormat == libretro::PixelRgb565 ? 2U : 4U;
+    if (pitch < static_cast<std::size_t>(width) * bytesPerPixel) {
+        throw std::runtime_error("Opera core reported an invalid video frame pitch.");
+    }
+    if (pitch > std::numeric_limits<std::size_t>::max() / height) {
+        throw std::runtime_error("Opera core reported a video pitch that overflows the frame buffer.");
+    }
+    m_frame.width = width;
+    m_frame.height = height;
+    m_frame.pixels.resize(static_cast<std::size_t>(width) * height);
+    const auto* source = static_cast<const std::uint8_t*>(data);
+    for (unsigned y = 0; y < height; ++y) {
+        const auto* row = source + static_cast<std::size_t>(y) * pitch;
+        for (unsigned x = 0; x < width; ++x) {
+            std::uint8_t red{}, green{}, blue{};
+            if (m_pixelFormat == libretro::Pixel0Rgb1555) {
+                std::uint16_t pixel{};
+                std::memcpy(&pixel, row + x * 2, sizeof(pixel));
+                red = static_cast<std::uint8_t>(((pixel >> 10U) & 31U) * 255U / 31U);
+                green = static_cast<std::uint8_t>(((pixel >> 5U) & 31U) * 255U / 31U);
+                blue = static_cast<std::uint8_t>((pixel & 31U) * 255U / 31U);
+            } else if (m_pixelFormat == libretro::PixelRgb565) {
+                std::uint16_t pixel{};
+                std::memcpy(&pixel, row + x * 2, sizeof(pixel));
+                red = static_cast<std::uint8_t>(((pixel >> 11U) & 31U) * 255U / 31U);
+                green = static_cast<std::uint8_t>(((pixel >> 5U) & 63U) * 255U / 63U);
+                blue = static_cast<std::uint8_t>((pixel & 31U) * 255U / 31U);
+            } else {
+                std::uint32_t pixel{};
+                std::memcpy(&pixel, row + x * 4, sizeof(pixel));
+                red = static_cast<std::uint8_t>((pixel >> 16U) & 0xFFU);
+                green = static_cast<std::uint8_t>((pixel >> 8U) & 0xFFU);
+                blue = static_cast<std::uint8_t>(pixel & 0xFFU);
+            }
+            m_frame.pixels[static_cast<std::size_t>(y) * width + x] =
+                0xFF000000U | (static_cast<std::uint32_t>(red) << 16U) |
+                (static_cast<std::uint32_t>(green) << 8U) | blue;
+        }
+    }
+    m_frame.dirty = true;
+}
+
+void Application::drawVideoFrame() {
+    if (m_frame.width == 0 || m_frame.height == 0) return;
+    if (!m_frameTexture || m_frameTextureWidth != static_cast<int>(m_frame.width) ||
+        m_frameTextureHeight != static_cast<int>(m_frame.height)) {
+        if (m_frameTexture) SDL_DestroyTexture(m_frameTexture);
+        m_frameTexture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_ARGB8888,
+            SDL_TEXTUREACCESS_STREAMING, static_cast<int>(m_frame.width), static_cast<int>(m_frame.height));
+        if (!m_frameTexture) {
+            setError(std::string("Unable to create the game video texture: ") + SDL_GetError());
+            return;
+        }
+        m_frameTextureWidth = static_cast<int>(m_frame.width);
+        m_frameTextureHeight = static_cast<int>(m_frame.height);
+        SDL_SetTextureScaleMode(m_frameTexture,
+            m_settings.scaleMode == "nearest" ? SDL_SCALEMODE_NEAREST : SDL_SCALEMODE_LINEAR);
+    }
+    if (m_frame.dirty) {
+        if (!SDL_UpdateTexture(m_frameTexture, nullptr, m_frame.pixels.data(),
+                               static_cast<int>(m_frame.width * sizeof(std::uint32_t)))) {
+            setError(std::string("Unable to upload the game video frame: ") + SDL_GetError());
+            return;
+        }
+        m_frame.dirty = false;
+    }
+
+    int windowWidth = 0;
+    int windowHeight = 0;
+    SDL_GetRenderOutputSize(m_renderer, &windowWidth, &windowHeight);
+    if (windowWidth <= 0 || windowHeight <= 0) return;
+    const float aspect = static_cast<float>(m_frame.width) / static_cast<float>(m_frame.height);
+    float width = static_cast<float>(windowWidth);
+    float height = width / aspect;
+    if (height > static_cast<float>(windowHeight)) {
+        height = static_cast<float>(windowHeight);
+        width = height * aspect;
+    }
+    const SDL_FRect destination{
+        (static_cast<float>(windowWidth) - width) * 0.5F,
+        (static_cast<float>(windowHeight) - height) * 0.5F,
+        width,
+        height
+    };
+    SDL_RenderTexture(m_renderer, m_frameTexture, nullptr, &destination);
+
+    if (m_settings.shaderPreset == "crt") {
+        SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(m_renderer, 0, 0, 0, 64);
+        const float spacing = std::max(2.0F, height / 240.0F);
+        for (float y = destination.y; y < destination.y + destination.h; y += spacing) {
+            const SDL_FRect line{destination.x, y, destination.w, std::max(1.0F, spacing * 0.35F)};
+            SDL_RenderFillRect(m_renderer, &line);
+        }
+        SDL_SetRenderDrawColor(m_renderer, 255, 255, 255, 255);
+    }
+}
+
+} // namespace app

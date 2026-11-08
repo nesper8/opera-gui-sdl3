@@ -82,8 +82,10 @@ Changing the video or audio backend requires restarting the application.
 
 Pushing a version tag such as `v0.1.0` builds and tests the Windows x64 frontend,
 packages `opera_frontend.exe`, `SDL3.dll`, and this README into a ZIP, and
-publishes it as a GitHub release. The same workflow can be run manually for an
-existing tag from the Actions tab.
+publishes it as a GitHub release. To create a tagged release automatically,
+run **Build and release** from the Actions tab and enter a semantic version
+without the leading `v` (for example, `0.1.1`). The workflow creates the tag
+from the selected commit, then builds and publishes the release.
 
 ## Layout
 

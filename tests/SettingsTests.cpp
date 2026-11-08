@@ -22,7 +22,6 @@ void testDefaultsAndRoundTrip() {
         app::Settings settings = app::Settings::defaults();
         require(settings.videoDriver == "opengl", "OpenGL must be the default video driver.");
         require(settings.audioDriver == "wasapi", "WASAPI must be the default audio driver.");
-        require(!settings.audioRateControl, "Adaptive audio rate control must be off by default.");
         require(settings.keyboardBindings[0][0] != 0, "Default keyboard bindings must be populated.");
         require(settings.gamepadBindings[0][0] == 1 && settings.gamepadBindings[0][1] == 0 &&
                     settings.gamepadBindings[0][8] == 2,
@@ -36,7 +35,6 @@ void testDefaultsAndRoundTrip() {
         settings.audioDriver = "default";
         settings.audioDevice = "Test speakers";
         settings.audioLatencyMs = 120;
-        settings.audioRateControl = true;
         settings.audioGain = 0.75F;
         settings.gamepadGuids[1] = "test-guid#1";
         settings.keyboardBindings[1][app::PadButtonCount - 1] = 77;
@@ -55,7 +53,6 @@ void testDefaultsAndRoundTrip() {
         require(loaded.audioDriver == "default", "Audio driver did not persist.");
         require(loaded.audioDevice == "Test speakers", "Audio output device did not persist.");
         require(loaded.audioLatencyMs == 120, "Audio latency did not persist.");
-        require(loaded.audioRateControl, "Audio rate control setting did not persist.");
         require(loaded.audioGain == 0.75F, "Audio gain did not persist.");
         require(loaded.gamepadGuids[1] == "test-guid#1", "Gamepad selection did not persist.");
         require(loaded.keyboardBindings[1][app::PadButtonCount - 1] == 77, "Keyboard mapping did not persist.");
@@ -66,7 +63,7 @@ void testDefaultsAndRoundTrip() {
         {
             std::ofstream output(file, std::ios::trunc);
             output << "[video]\ndriver=unknown\ngpu=unknown\n[audio]\ngain=nan\n"
-                      "latency_ms=999\nrate_control=true\nadaptive_rate_control=invalid\n"
+                      "latency_ms=999\n"
                       "[performance]\nfps_counter=invalid\n"
                       "[system]\nuse_detected_bios=invalid\n";
         }
@@ -77,7 +74,12 @@ void testDefaultsAndRoundTrip() {
         require(sanitized.useDetectedBios, "Invalid BIOS setting must fall back to enabled.");
         require(sanitized.audioGain == 1.0F, "Non-finite gain must fall back to its default.");
         require(sanitized.audioLatencyMs == 200, "Audio latency must be clamped to the supported range.");
-        require(!sanitized.audioRateControl, "Invalid audio rate control setting must fall back to disabled.");
+        {
+            std::ofstream output(file, std::ios::trunc);
+            output << "[audio]\ngain=2.0\n";
+        }
+        const app::Settings clippedGain = app::Settings::load(file);
+        require(clippedGain.audioGain == 1.0F, "Audio gain above unity must be clamped to avoid clipping.");
     } catch (...) {
         std::error_code ignored;
         std::filesystem::remove_all(directory, ignored);

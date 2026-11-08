@@ -539,9 +539,7 @@ void Application::drawAudioSettings() {
         ImGui::TextDisabled("(lower latency, higher stutter risk)");
     }
 
-    const bool rateControlChanged = ImGui::Checkbox(
-        "Enable adaptive audio rate control", &m_settings.audioRateControl);
-    if (ImGui::SliderFloat("Output gain", &m_settings.audioGain, 0.0F, 2.0F, "%.2f")) {
+    if (ImGui::SliderFloat("Output gain", &m_settings.audioGain, 0.0F, 1.0F, "%.2f")) {
         if (m_audio) m_audio->setGain(m_settings.audioGain);
         saveSettings();
     }
@@ -559,15 +557,11 @@ void Application::drawAudioSettings() {
         saveSettings();
         if (m_error.empty()) m_status = "Audio output settings applied.";
     }
-    if (rateControlChanged) {
-        if (m_audio) m_audio->setRateControl(m_settings.audioRateControl);
-        saveSettings();
-    }
     if (driverChanged) {
         saveSettings();
         m_status = "Restart the application to apply the audio driver change.";
     }
-    ImGui::TextWrapped("Adaptive rate control is off by default because it changes playback speed and pitch. Enable it only if you prefer fewer audio dropouts over pitch accuracy.");
+    ImGui::TextWrapped("Playback rate is kept at the core's native speed. Output gain is capped at unity to avoid introducing clipping.");
     ImGui::TextWrapped("The requested device buffer size is a hint; SDL and the audio driver may choose a different effective latency.");
 }
 

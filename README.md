@@ -28,11 +28,10 @@ not launch RetroArch.
   high-performance; the choice is stored as a per-application Windows graphics
   preference and takes effect after restarting the frontend.
 - Uses SDL audio with WASAPI selected by default, a system-default audio
-  backend option, selectable output device, configurable audio latency and
-  optional adaptive audio rate control, plus adjustable output gain. Adaptive
-  rate control is off by default because it changes pitch as it adjusts playback
-  speed. Audio latency is a requested SDL buffer size; the audio backend may
-  choose a different effective value.
+  backend option, selectable output device, configurable audio latency, and
+  adjustable output gain. Playback stays at the core's native rate, and gain
+  is capped at unity to avoid frontend-induced clipping. Audio latency is a
+  requested SDL buffer size; the audio backend may choose a different effective value.
 - Detects supported 3DO BIOS filenames in the application's `bios` directory
   and uses that directory as the core system directory when enabled. Detection
   is optional; when no BIOS is found, the existing user system directory is used.

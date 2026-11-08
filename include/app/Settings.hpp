@@ -21,7 +21,6 @@ struct Settings final {
     std::string audioDriver = "wasapi";
     std::string audioDevice;
     int audioLatencyMs = 80;
-    bool audioRateControl = false;
     float audioGain = 1.0F;
     std::array<std::string, 2> gamepadGuids{};
     std::array<std::array<int, PadButtonCount>, 2> keyboardBindings{};

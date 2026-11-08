@@ -101,10 +101,7 @@ Settings Settings::load(const std::filesystem::path& file) {
             else if (key == "device") result.audioDevice = value;
             else if (key == "latency_ms") {
                 result.audioLatencyMs = std::clamp(parseInteger(value, result.audioLatencyMs), 16, 200);
-            } else if (key == "adaptive_rate_control") {
-                result.audioRateControl = parseBool(value, result.audioRateControl);
-            }
-            else if (key == "gain") result.audioGain = std::clamp(parseGain(value, result.audioGain), 0.0F, 2.0F);
+            } else if (key == "gain") result.audioGain = std::clamp(parseGain(value, result.audioGain), 0.0F, 1.0F);
         } else if (section == "performance") {
             if (key == "fps_counter") result.showFpsCounter = parseBool(value, result.showFpsCounter);
         } else if (section == "system") {
@@ -154,7 +151,6 @@ void Settings::save(const std::filesystem::path& file) const {
                << "driver=" << audioDriver << '\n'
                << "device=" << audioDevice << '\n'
                << "latency_ms=" << audioLatencyMs << '\n'
-               << "adaptive_rate_control=" << (audioRateControl ? "true" : "false") << '\n'
                << "gain=" << audioGain << "\n\n"
                << "[performance]\n"
                << "fps_counter=" << (showFpsCounter ? "true" : "false") << "\n\n"

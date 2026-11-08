@@ -12,8 +12,7 @@ not launch RetroArch.
   with legacy option fallback in the settings window, with a control to restore
   the Opera core's option defaults.
 - Provides a section-specific revert-to-defaults control on each settings tab.
-- Opens ISO and BIN/CUE images using SDL's native file dialog. CHD loading is
-  temporarily unavailable.
+- Opens ISO, BIN/CUE, and CHD disc images using SDL's native file dialog.
 - Routes the two emulated joypads independently to an SDL gamepad (including
   XInput controllers) or remappable keyboard controls. Bindings are captured
   from connected controllers or the keyboard; analog stick directions can be
@@ -73,7 +72,7 @@ the current Opera core, configure with
 to the libretro buildbot.
 
 Run `build/opera_frontend.exe` (the build copies `SDL3.dll` beside it), download
-the core from the launch window, then open an ISO or BIN/CUE game image. The
+the core from the launch window, then open an ISO, BIN/CUE, or CHD game image. The
 Core tab shows the system and save directories. BIN/CUE sets should be opened
 through their `.cue` file.
 Changing the video or audio backend requires restarting the application.

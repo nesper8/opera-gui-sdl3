@@ -24,8 +24,9 @@ void Application::loadGame(const std::filesystem::path& path) {
     std::string extension = path.extension().string();
     std::transform(extension.begin(), extension.end(), extension.begin(),
                    [](const unsigned char character) { return static_cast<char>(std::tolower(character)); });
-    if (extension != ".iso" && extension != ".cue" && extension != ".bin") {
-        throw std::invalid_argument("Choose an ISO, CUE, or BIN game image.");
+    if (extension != ".iso" && extension != ".cue" && extension != ".bin" &&
+        extension != ".chd") {
+        throw std::invalid_argument("Choose an ISO, CUE, BIN, or CHD game image.");
     }
     m_session.loadGame(path);
     m_gamePath = path.string();
@@ -50,7 +51,7 @@ void Application::loadCore() {
     m_session.loadCore(m_coreDirectory / "opera_libretro.dll", m_systemDirectory,
                        m_saveDirectory, m_settings, std::move(callbacks));
     m_coreName = m_session.core()->coreName();
-    m_status = "Opera core loaded. Choose an ISO, CUE, or BIN image.";
+    m_status = "Opera core loaded. Choose an ISO, CUE, BIN, or CHD image.";
     m_error.clear();
 }
 

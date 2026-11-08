@@ -260,9 +260,10 @@ void Application::handleEvent(const SDL_Event& event) {
 
 void Application::openGameDialog() {
     static constexpr SDL_DialogFileFilter filters[]{
-        {"3DO games", "iso;cue;bin"},
+        {"3DO games", "iso;cue;bin;chd"},
         {"ISO disc images", "iso"},
-        {"BIN/CUE disc images", "cue;bin"}
+        {"BIN/CUE disc images", "cue;bin"},
+        {"CHD disc images", "chd"}
     };
     SDL_ShowOpenFileDialog(&Application::fileDialogCallback, this, m_runtime.window(),
                            filters, static_cast<int>(std::size(filters)), nullptr, false);

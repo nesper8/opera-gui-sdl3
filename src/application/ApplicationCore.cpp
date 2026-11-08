@@ -33,6 +33,7 @@ void Application::loadGame(const std::filesystem::path& path) {
     m_status = "Running " + path.filename().string() + ".";
     m_error.clear();
     m_uiVisible = false;
+    m_lastMouseActivity = std::chrono::steady_clock::now();
     m_captureBinding.reset();
 }
 
@@ -85,7 +86,7 @@ void Application::requestCoreDownload() {
 }
 
 bool Application::setFullscreen(const bool fullscreen) {
-    return m_runtime.setFullscreen(fullscreen);
+    return m_runtime.setFullscreen(fullscreen, m_settings.fullscreenMode);
 }
 
 void Application::saveSettings() {

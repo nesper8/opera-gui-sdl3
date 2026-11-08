@@ -46,7 +46,7 @@ void FrontendRuntime::initialize(const Settings& settings, const std::string& im
     if (!m_vsyncActive) {
         Logger::write(LogLevel::Warning, std::string("VSync could not be configured: ") + SDL_GetError());
     }
-    if (settings.fullscreen && !setFullscreen(true)) {
+    if (settings.fullscreen && !setFullscreen(true, settings.fullscreenMode)) {
         Logger::write(LogLevel::Warning, std::string("Fullscreen could not be enabled: ") + SDL_GetError());
     }
 
@@ -65,63 +65,73 @@ void FrontendRuntime::initialize(const Settings& settings, const std::string& im
     m_imguiRendererInitialized = true;
 }
 
-bool FrontendRuntime::setFullscreen(const bool fullscreen) {
-    if (fullscreen == m_borderlessFullscreen) return true;
+bool FrontendRuntime::setFullscreen(const bool fullscreen, const std::string& mode) {
+    if (mode != "borderless" && mode != "exclusive") {
+        SDL_SetError("Unsupported fullscreen mode: %s", mode.c_str());
+        return false;
+    }
 
-    if (fullscreen) {
-        SDL_Rect displayBounds{};
+    const auto restoreWindowed = [this]() {
+        if (!m_activeFullscreenMode.empty()) {
+            if (!SDL_SetWindowFullscreen(m_window, false) || !SDL_SyncWindow(m_window)) return false;
+            if (!SDL_SetWindowFullscreenMode(m_window, nullptr)) return false;
+        }
+        if (!SDL_SetWindowBordered(m_window, true) ||
+            !SDL_SetWindowPosition(m_window, m_windowedX, m_windowedY) ||
+            !SDL_SetWindowSize(m_window, m_windowedWidth, m_windowedHeight) ||
+            !SDL_SyncWindow(m_window)) {
+            return false;
+        }
+        m_fullscreen = false;
+        m_activeFullscreenMode.clear();
+        m_hasWindowedBounds = false;
+        return true;
+    };
+
+    if (!fullscreen) {
+        return !m_fullscreen || restoreWindowed();
+    }
+
+    if (m_fullscreen && m_activeFullscreenMode == mode) return true;
+    if (m_fullscreen && !restoreWindowed()) return false;
+    if (!m_hasWindowedBounds) {
         if (!SDL_GetWindowPosition(m_window, &m_windowedX, &m_windowedY) ||
-            !SDL_GetWindowSize(m_window, &m_windowedWidth, &m_windowedHeight) ||
-            !SDL_GetDisplayBounds(SDL_GetDisplayForWindow(m_window), &displayBounds)) {
+            !SDL_GetWindowSize(m_window, &m_windowedWidth, &m_windowedHeight)) {
             return false;
         }
         m_hasWindowedBounds = true;
-        if (SDL_SetWindowBordered(m_window, false) &&
-            SDL_SetWindowPosition(m_window, displayBounds.x, displayBounds.y) &&
-            SDL_SetWindowSize(m_window, displayBounds.w, displayBounds.h) &&
-            SDL_SyncWindow(m_window)) {
-            m_borderlessFullscreen = true;
-            return true;
-        }
+    }
 
-        const std::string error = SDL_GetError();
-        const bool restored = SDL_SetWindowBordered(m_window, true) &&
-            SDL_SetWindowPosition(m_window, m_windowedX, m_windowedY) &&
-            SDL_SetWindowSize(m_window, m_windowedWidth, m_windowedHeight) &&
+    m_activeFullscreenMode = mode;
+    bool entered = false;
+    if (mode == "borderless") {
+        entered = SDL_SetWindowFullscreenMode(m_window, nullptr) &&
+            SDL_SetWindowFullscreen(m_window, true) &&
             SDL_SyncWindow(m_window);
-        m_hasWindowedBounds = false;
-        if (!restored) {
+    } else {
+        const SDL_DisplayID display = SDL_GetDisplayForWindow(m_window);
+        const SDL_DisplayMode* displayMode = display ? SDL_GetCurrentDisplayMode(display) : nullptr;
+        entered = displayMode &&
+            SDL_SetWindowBordered(m_window, true) &&
+            SDL_SetWindowFullscreenMode(m_window, displayMode) &&
+            SDL_SetWindowFullscreen(m_window, true) &&
+            SDL_SyncWindow(m_window);
+    }
+
+    if (!entered) {
+        const std::string error = SDL_GetError();
+        if (!restoreWindowed()) {
             Logger::write(LogLevel::Error, std::string("Unable to restore the window after fullscreen failed: ") +
                                            SDL_GetError());
         }
+        m_fullscreen = false;
+        m_activeFullscreenMode.clear();
+        m_hasWindowedBounds = false;
         SDL_SetError("%s", error.c_str());
         return false;
     }
-
-    if (!m_hasWindowedBounds) {
-        SDL_SetError("No saved windowed bounds are available.");
-        return false;
-    }
-    SDL_Rect displayBounds{};
-    if (!SDL_GetDisplayBounds(SDL_GetDisplayForWindow(m_window), &displayBounds)) return false;
-    if (!SDL_SetWindowBordered(m_window, true) ||
-        !SDL_SetWindowPosition(m_window, m_windowedX, m_windowedY) ||
-        !SDL_SetWindowSize(m_window, m_windowedWidth, m_windowedHeight) ||
-        !SDL_SyncWindow(m_window)) {
-        const std::string error = SDL_GetError();
-        const bool restored = SDL_SetWindowBordered(m_window, false) &&
-            SDL_SetWindowPosition(m_window, displayBounds.x, displayBounds.y) &&
-            SDL_SetWindowSize(m_window, displayBounds.w, displayBounds.h) &&
-            SDL_SyncWindow(m_window);
-        if (!restored) {
-            Logger::write(LogLevel::Error, std::string("Unable to restore borderless fullscreen after windowed mode failed: ") +
-                                           SDL_GetError());
-        }
-        SDL_SetError("%s", error.c_str());
-        return false;
-    }
-    m_borderlessFullscreen = false;
-    m_hasWindowedBounds = false;
+    m_fullscreen = true;
+    m_activeFullscreenMode = mode;
     return true;
 }
 

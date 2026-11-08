@@ -26,6 +26,7 @@ public:
 
     void configure(double sampleRate);
     void submit(const std::int16_t* samples, std::size_t frames) noexcept;
+    void discardQueuedAudio() noexcept;
     void setGain(float gain) noexcept;
     static std::vector<AudioDeviceInfo> playbackDevices();
 

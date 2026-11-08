@@ -15,6 +15,7 @@ struct Settings final {
     std::string gpuPreference = "system";
     std::string scaleMode = "nearest";
     std::string shaderPreset = "none";
+    std::string fullscreenMode = "borderless";
     bool vsync = true;
     bool fullscreen = false;
     bool showFpsCounter = false;

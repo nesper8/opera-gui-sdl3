@@ -31,6 +31,7 @@ void Application::drawVideoSettings() {
             m_settings.gpuPreference = defaults.gpuPreference;
             m_settings.scaleMode = defaults.scaleMode;
             m_settings.shaderPreset = defaults.shaderPreset;
+            m_settings.fullscreenMode = defaults.fullscreenMode;
             m_settings.vsync = defaults.vsync;
             m_settings.fullscreen = defaults.fullscreen;
             m_pendingFullscreen = m_settings.fullscreen;
@@ -102,6 +103,26 @@ void Application::drawVideoSettings() {
         {{"nearest", "Nearest (pixel sharp)"}, {"linear", "Linear"}});
     changed |= ui::selectableCombo("Shader preset", m_settings.shaderPreset,
         {{"none", "None"}, {"crt", "CRT scanlines"}});
+    const char* fullscreenModeLabel = m_settings.fullscreenMode == "exclusive"
+        ? "Exclusive fullscreen" : "Borderless windowed";
+    bool fullscreenModeChanged = false;
+    if (ImGui::BeginCombo("Fullscreen mode", fullscreenModeLabel)) {
+        const bool borderlessSelected = m_settings.fullscreenMode == "borderless";
+        if (ImGui::Selectable("Borderless windowed", borderlessSelected)) {
+            m_settings.fullscreenMode = "borderless";
+            fullscreenModeChanged = true;
+        }
+        if (borderlessSelected) ImGui::SetItemDefaultFocus();
+        const bool exclusiveSelected = m_settings.fullscreenMode == "exclusive";
+        if (ImGui::Selectable("Exclusive fullscreen", exclusiveSelected)) {
+            m_settings.fullscreenMode = "exclusive";
+            fullscreenModeChanged = true;
+        }
+        if (exclusiveSelected) ImGui::SetItemDefaultFocus();
+        ImGui::EndCombo();
+    }
+    if (fullscreenModeChanged && m_settings.fullscreen) m_pendingFullscreen = true;
+    changed |= fullscreenModeChanged;
     changed |= ImGui::Checkbox("Vertical sync", &m_settings.vsync);
 
     if (highResolutionOption &&
@@ -140,9 +161,12 @@ void Application::drawVideoSettings() {
         m_pendingFullscreen = m_settings.fullscreen;
         changed = true;
     }
+    ImGui::TextDisabled("F11 toggles between windowed and the selected fullscreen mode.");
     if (changed) {
         saveSettings();
-        m_status = "Restart the application to apply a video driver change.";
+        m_status = fullscreenModeChanged
+            ? (m_settings.fullscreen ? "Fullscreen mode updated." : "Fullscreen mode saved.")
+            : "Restart the application to apply a video driver change.";
         if (m_frameTexture) SDL_SetTextureScaleMode(m_frameTexture,
             m_settings.scaleMode == "nearest" ? SDL_SCALEMODE_NEAREST : SDL_SCALEMODE_LINEAR);
         if (!m_runtime.setVsync(m_settings.vsync)) {

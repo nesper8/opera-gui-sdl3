@@ -22,12 +22,16 @@ not launch RetroArch.
   D-pad, A/B/C, L/R, Select, and Start. Identical gamepads are distinguished
   by their enumeration order.
 - Automatically hides the settings window after a game loads; close or hide it
-  at any time and press F2 to show it again.
+  at any time and press F2 to show it again. The cursor hides after five seconds
+  without mouse movement while the menu is hidden, and reappears when the mouse
+  moves. The menu includes a Quit button.
 - Shows the hidden-menu hint for five seconds before fading it out, and provides
   an optional rendered-FPS counter that can be enabled in the Performance tab
   or toggled at any time with F3.
 - Selects SDL's OpenGL or Vulkan renderer, nearest/linear scaling, VSync,
-  borderless desktop fullscreen, and a built-in CRT scanline presentation preset. On Windows,
+  user-selectable borderless windowed or exclusive fullscreen, and a built-in
+  CRT scanline presentation preset. F11 toggles between windowed and the
+  selected fullscreen mode. On Windows,
   the GPU preference can be set to system default, power-saving, or
   high-performance; the choice is stored as a per-application Windows graphics
   preference and takes effect after restarting the frontend.

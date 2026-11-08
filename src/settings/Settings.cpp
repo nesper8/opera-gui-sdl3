@@ -116,6 +116,8 @@ Settings Settings::load(const std::filesystem::path& file) {
                                       value == "high_performance")) result.gpuPreference = value;
             else if (key == "scale" && (value == "nearest" || value == "linear")) result.scaleMode = value;
             else if (key == "shader" && (value == "none" || value == "crt")) result.shaderPreset = value;
+            else if (key == "fullscreen_mode" &&
+                     (value == "borderless" || value == "exclusive")) result.fullscreenMode = value;
             else if (key == "vsync") result.vsync = parseBool(value, result.vsync);
             else if (key == "fullscreen") result.fullscreen = parseBool(value, result.fullscreen);
         } else if (section == "audio") {
@@ -169,6 +171,7 @@ void Settings::save(const std::filesystem::path& file) const {
                << "gpu=" << gpuPreference << '\n'
                << "scale=" << scaleMode << '\n'
                << "shader=" << shaderPreset << '\n'
+               << "fullscreen_mode=" << fullscreenMode << '\n'
                << "vsync=" << (vsync ? "true" : "false") << '\n'
                << "fullscreen=" << (fullscreen ? "true" : "false") << "\n\n"
                << "[audio]\n"

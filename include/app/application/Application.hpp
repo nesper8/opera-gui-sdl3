@@ -68,6 +68,7 @@ private:
     void checkDownload();
     void requestCoreDownload();
     bool setFullscreen(bool fullscreen);
+    void updateCursorVisibility();
     void saveSettings();
     void setError(const std::string& message);
     void onVideo(const void* data, unsigned width, unsigned height, std::size_t pitch);
@@ -91,6 +92,7 @@ private:
     unsigned m_pixelFormat{};
     bool m_running{true};
     bool m_uiVisible{true};
+    std::chrono::steady_clock::time_point m_lastMouseActivity{};
     std::chrono::steady_clock::time_point m_menuHintStart{};
     std::chrono::steady_clock::time_point m_fpsLastUpdate{};
     std::size_t m_fpsFrameCount{};

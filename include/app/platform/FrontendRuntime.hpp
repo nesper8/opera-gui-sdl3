@@ -18,8 +18,8 @@ public:
 
     void initialize(const Settings& settings, const std::string& imguiIniFile);
     void processEvent(const SDL_Event& event) const noexcept;
-    bool setFullscreen(bool fullscreen);
-    bool fullscreen() const noexcept { return m_borderlessFullscreen; }
+    bool setFullscreen(bool fullscreen, const std::string& mode);
+    bool fullscreen() const noexcept { return m_fullscreen; }
     bool recreateRendererDeviceObjects() noexcept;
     bool setVsync(bool enabled) noexcept;
     bool vsyncActive() const noexcept { return m_vsyncActive; }
@@ -33,9 +33,10 @@ private:
     int m_windowedY{};
     int m_windowedWidth{};
     int m_windowedHeight{};
+    std::string m_activeFullscreenMode;
     bool m_sdlInitialized{};
     bool m_vsyncActive{};
-    bool m_borderlessFullscreen{};
+    bool m_fullscreen{};
     bool m_hasWindowedBounds{};
     bool m_imguiContext{};
     bool m_imguiPlatformInitialized{};

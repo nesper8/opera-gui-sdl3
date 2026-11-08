@@ -93,6 +93,12 @@ void AudioOutput::submit(const std::int16_t* samples, const std::size_t frames) 
     }
 }
 
+void AudioOutput::discardQueuedAudio() noexcept {
+    if (m_stream && !SDL_ClearAudioStream(m_stream)) {
+        Logger::write(LogLevel::Error, std::string("Unable to clear queued audio: ") + SDL_GetError());
+    }
+}
+
 void AudioOutput::setGain(const float gain) noexcept {
     if (m_stream && !SDL_SetAudioStreamGain(m_stream, std::clamp(gain, 0.0F, 1.0F))) {
         Logger::write(LogLevel::Error, std::string("Unable to set audio gain: ") + SDL_GetError());

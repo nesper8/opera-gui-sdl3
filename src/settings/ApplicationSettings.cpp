@@ -27,8 +27,11 @@ void Application::drawInterface() {
     ImGui::SameLine();
     if (ImGui::Button("Hide menu (F2)")) {
         m_uiVisible = false;
+        m_lastMouseActivity = std::chrono::steady_clock::now();
         m_captureBinding.reset();
     }
+    ImGui::SameLine();
+    if (ImGui::Button("Quit")) m_running = false;
     ImGui::Separator();
 
     if (ImGui::BeginTabBar("settings-tabs")) {

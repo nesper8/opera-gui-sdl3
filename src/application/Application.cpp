@@ -133,6 +133,7 @@ int Application::run() {
     while (m_running) {
         SDL_Event event{};
         while (SDL_PollEvent(&event)) handleEvent(event);
+        updateCursorVisibility();
         checkDownload();
         if (m_pendingFullscreen) {
             const bool fullscreen = *m_pendingFullscreen;
@@ -143,6 +144,7 @@ int Application::run() {
                 saveSettings();
             } else {
                 nextCoreFrame = Clock::now();
+                if (m_session.audio()) m_session.audio()->discardQueuedAudio();
             }
         }
         if (m_pendingGame) {
@@ -170,6 +172,7 @@ int Application::run() {
             nextCoreFrame = Clock::now();
         }
         render();
+        updateCursorVisibility();
         if (m_session.core() && m_session.core()->gameLoaded() && !m_runtime.vsyncActive()) {
             std::this_thread::sleep_until(nextCoreFrame);
         } else if ((!m_session.core() || !m_session.core()->gameLoaded()) && !m_runtime.vsyncActive()) {
@@ -203,6 +206,12 @@ void Application::initialize() {
 
 void Application::handleEvent(const SDL_Event& event) {
     m_runtime.processEvent(event);
+    if (event.type == SDL_EVENT_MOUSE_MOTION && !m_uiVisible) {
+        m_lastMouseActivity = std::chrono::steady_clock::now();
+        if (!SDL_CursorVisible() && !SDL_ShowCursor()) {
+            Logger::write(LogLevel::Error, std::string("Unable to show mouse cursor: ") + SDL_GetError());
+        }
+    }
     const bool bindingWasActive = m_captureBinding.has_value();
     if (m_captureBinding && event.type == SDL_EVENT_KEY_DOWN &&
         event.key.scancode == SDL_SCANCODE_ESCAPE) {
@@ -262,6 +271,8 @@ void Application::handleEvent(const SDL_Event& event) {
     } else if (!bindingWasActive && event.type == SDL_EVENT_KEY_DOWN &&
                event.key.key == SDLK_F2 && !event.key.repeat) {
         m_uiVisible = !m_uiVisible;
+        m_lastMouseActivity = m_uiVisible ? std::chrono::steady_clock::time_point{} :
+                                            std::chrono::steady_clock::now();
         m_captureBinding.reset();
     } else if (!bindingWasActive && event.type == SDL_EVENT_KEY_DOWN &&
                event.key.key == SDLK_F3 && !event.key.repeat) {
@@ -276,6 +287,25 @@ void Application::handleEvent(const SDL_Event& event) {
     } else if (!bindingWasActive && event.type == SDL_EVENT_KEY_DOWN &&
                event.key.key == SDLK_F1 && !event.key.repeat) {
         if (m_session.core()) m_session.core()->reset();
+    }
+}
+
+void Application::updateCursorVisibility() {
+    using Clock = std::chrono::steady_clock;
+    constexpr auto CursorIdleTimeout = std::chrono::seconds(5);
+    const auto now = Clock::now();
+    bool shouldShow = m_uiVisible;
+    if (m_uiVisible) {
+        m_lastMouseActivity = {};
+    } else {
+        if (m_lastMouseActivity == Clock::time_point{}) m_lastMouseActivity = now;
+        shouldShow = now - m_lastMouseActivity < CursorIdleTimeout;
+    }
+
+    if (shouldShow && !SDL_CursorVisible() && !SDL_ShowCursor()) {
+        Logger::write(LogLevel::Error, std::string("Unable to show mouse cursor: ") + SDL_GetError());
+    } else if (!shouldShow && SDL_CursorVisible() && !SDL_HideCursor()) {
+        Logger::write(LogLevel::Error, std::string("Unable to hide mouse cursor: ") + SDL_GetError());
     }
 }
 

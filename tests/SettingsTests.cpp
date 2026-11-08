@@ -21,6 +21,8 @@ void testDefaultsAndRoundTrip() {
     try {
         app::Settings settings = app::Settings::defaults();
         require(settings.videoDriver == "opengl", "OpenGL must be the default video driver.");
+        require(settings.fullscreenMode == "borderless",
+                "Borderless windowed must be the default fullscreen mode.");
         require(settings.audioDriver == "default", "SDL default must be the default audio driver.");
         require(settings.audioLatencyMs == 40, "Audio latency must default to 40 ms.");
         require(!settings.keyboardBindings[0][0].empty(), "Default keyboard bindings must be populated.");
@@ -50,6 +52,7 @@ void testDefaultsAndRoundTrip() {
         settings.useDetectedBios = false;
         settings.scaleMode = "linear";
         settings.shaderPreset = "crt";
+        settings.fullscreenMode = "exclusive";
         settings.audioDriver = "default";
         settings.audioDevice = "Test speakers";
         settings.audioLatencyMs = 120;
@@ -70,6 +73,7 @@ void testDefaultsAndRoundTrip() {
         require(!loaded.useDetectedBios, "Optional BIOS setting did not persist.");
         require(loaded.scaleMode == "linear", "Scale mode did not persist.");
         require(loaded.shaderPreset == "crt", "Shader preset did not persist.");
+        require(loaded.fullscreenMode == "exclusive", "Fullscreen mode did not persist.");
         require(loaded.audioDriver == "default", "Audio driver did not persist.");
         require(loaded.audioDevice == "Test speakers", "Audio output device did not persist.");
         require(loaded.audioLatencyMs == 120, "Audio latency did not persist.");
@@ -98,7 +102,8 @@ void testDefaultsAndRoundTrip() {
 
         {
             std::ofstream output(file, std::ios::trunc);
-            output << "[video]\ndriver=unknown\ngpu=unknown\n[audio]\ngain=nan\n"
+            output << "[video]\ndriver=unknown\ngpu=unknown\nfullscreen_mode=unknown\n"
+                      "[audio]\ngain=nan\n"
                       "latency_ms=999\n"
                       "[performance]\nfps_counter=invalid\n"
                       "[system]\nuse_detected_bios=invalid\n";
@@ -106,6 +111,8 @@ void testDefaultsAndRoundTrip() {
         const app::Settings sanitized = app::Settings::load(file);
         require(sanitized.videoDriver == "opengl", "Unknown renderer must fall back to OpenGL.");
         require(sanitized.gpuPreference == "system", "Unknown GPU preference must fall back to system default.");
+        require(sanitized.fullscreenMode == "borderless",
+                "Unknown fullscreen mode must fall back to borderless windowed.");
         require(!sanitized.showFpsCounter, "Invalid FPS counter setting must fall back to disabled.");
         require(sanitized.useDetectedBios, "Invalid BIOS setting must fall back to enabled.");
         require(sanitized.audioGain == 1.0F, "Non-finite gain must fall back to its default.");

@@ -21,7 +21,7 @@ struct Settings final {
     bool useDetectedBios = true;
     std::string audioDriver = "default";
     std::string audioDevice;
-    int audioLatencyMs = 80;
+    int audioLatencyMs = 40;
     float audioGain = 1.0F;
     std::array<std::string, 2> gamepadGuids{};
     std::array<std::array<std::vector<int>, PadButtonCount>, 2> keyboardBindings{};

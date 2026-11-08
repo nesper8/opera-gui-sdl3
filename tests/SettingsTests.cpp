@@ -28,6 +28,7 @@ void testDefaultsAndRoundTrip() {
                 "Default gamepad bindings must match the 3DO B, A, and C labels.");
         settings.videoDriver = "vulkan";
         settings.gpuPreference = "high_performance";
+        settings.showFpsCounter = true;
         settings.scaleMode = "linear";
         settings.shaderPreset = "crt";
         settings.audioDriver = "default";
@@ -42,6 +43,7 @@ void testDefaultsAndRoundTrip() {
         const app::Settings loaded = app::Settings::load(file);
         require(loaded.videoDriver == "vulkan", "Video driver did not persist.");
         require(loaded.gpuPreference == "high_performance", "GPU preference did not persist.");
+        require(loaded.showFpsCounter, "FPS counter setting did not persist.");
         require(loaded.scaleMode == "linear", "Scale mode did not persist.");
         require(loaded.shaderPreset == "crt", "Shader preset did not persist.");
         require(loaded.audioDriver == "default", "Audio driver did not persist.");
@@ -54,11 +56,13 @@ void testDefaultsAndRoundTrip() {
 
         {
             std::ofstream output(file, std::ios::trunc);
-            output << "[video]\ndriver=unknown\ngpu=unknown\n[audio]\ngain=nan\n";
+            output << "[video]\ndriver=unknown\ngpu=unknown\n[audio]\ngain=nan\n"
+                      "[performance]\nfps_counter=invalid\n";
         }
         const app::Settings sanitized = app::Settings::load(file);
         require(sanitized.videoDriver == "opengl", "Unknown renderer must fall back to OpenGL.");
         require(sanitized.gpuPreference == "system", "Unknown GPU preference must fall back to system default.");
+        require(!sanitized.showFpsCounter, "Invalid FPS counter setting must fall back to disabled.");
         require(sanitized.audioGain == 1.0F, "Non-finite gain must fall back to its default.");
     } catch (...) {
         std::error_code ignored;

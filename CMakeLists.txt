@@ -31,6 +31,41 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(SDL3 imgui)
 
+cmake_host_system_information(
+    RESULT WINDOWS_KITS_ROOT
+    QUERY WINDOWS_REGISTRY
+    "HKEY_LOCAL_MACHINE/SOFTWARE/Microsoft/Windows Kits/Installed Roots"
+    VALUE KitsRoot10
+    VIEW 64
+)
+if(NOT WINDOWS_KITS_ROOT OR NOT EXISTS "${WINDOWS_KITS_ROOT}")
+    message(FATAL_ERROR "Unable to locate the installed Windows 10/11 SDK.")
+endif()
+
+file(GLOB WINDOWS_SDK_LIBRARY_DIRS LIST_DIRECTORIES true
+    "${WINDOWS_KITS_ROOT}/Lib/*/um/x64"
+)
+list(SORT WINDOWS_SDK_LIBRARY_DIRS COMPARE NATURAL ORDER DESCENDING)
+list(GET WINDOWS_SDK_LIBRARY_DIRS 0 WINDOWS_SDK_UM_LIBRARY_DIR)
+get_filename_component(WINDOWS_SDK_VERSION_DIR
+    "${WINDOWS_SDK_UM_LIBRARY_DIR}/../.." ABSOLUTE
+)
+set(WINDOWS_SDK_UCRT_LIBRARY_DIR "${WINDOWS_SDK_VERSION_DIR}/ucrt/x64")
+get_filename_component(MSVC_COMPILER_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+get_filename_component(MSVC_HOST_ARCH_DIR "${MSVC_COMPILER_DIR}" DIRECTORY)
+get_filename_component(MSVC_BIN_DIR "${MSVC_HOST_ARCH_DIR}" DIRECTORY)
+get_filename_component(MSVC_TOOLSET_DIR "${MSVC_BIN_DIR}" DIRECTORY)
+set(MSVC_LIBRARY_DIR "${MSVC_TOOLSET_DIR}/lib/x64")
+if(NOT EXISTS "${MSVC_LIBRARY_DIR}/msvcprt.lib")
+    message(FATAL_ERROR "Unable to locate the MSVC x64 runtime libraries: ${MSVC_LIBRARY_DIR}")
+endif()
+find_library(WINHTTP_LIBRARY
+    NAMES winhttp
+    PATHS ${WINDOWS_SDK_LIBRARY_DIRS}
+    NO_DEFAULT_PATH
+    REQUIRED
+)
+
 add_executable(opera_frontend
     src/Application.cpp
     src/AudioOutput.cpp
@@ -52,7 +87,12 @@ add_executable(opera_frontend
 target_compile_features(opera_frontend PRIVATE cxx_std_20)
 target_compile_definitions(opera_frontend PRIVATE SDL_MAIN_HANDLED NOMINMAX WIN32_LEAN_AND_MEAN)
 target_include_directories(opera_frontend PRIVATE include "${imgui_SOURCE_DIR}" "${imgui_SOURCE_DIR}/backends")
-target_link_libraries(opera_frontend PRIVATE SDL3::SDL3 winhttp advapi32)
+target_link_directories(opera_frontend PRIVATE
+    "${WINDOWS_SDK_UM_LIBRARY_DIR}"
+    "${WINDOWS_SDK_UCRT_LIBRARY_DIR}"
+    "${MSVC_LIBRARY_DIR}"
+)
+target_link_libraries(opera_frontend PRIVATE SDL3::SDL3 "${WINHTTP_LIBRARY}" advapi32)
 add_custom_command(TARGET opera_frontend POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "$<TARGET_FILE:SDL3::SDL3>"
@@ -88,7 +128,12 @@ if(BUILD_TESTING)
         target_compile_features(core_downloader_tests PRIVATE cxx_std_20)
         target_compile_definitions(core_downloader_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
         target_include_directories(core_downloader_tests PRIVATE include)
-        target_link_libraries(core_downloader_tests PRIVATE winhttp)
+        target_link_directories(core_downloader_tests PRIVATE
+            "${WINDOWS_SDK_UM_LIBRARY_DIR}"
+            "${WINDOWS_SDK_UCRT_LIBRARY_DIR}"
+            "${MSVC_LIBRARY_DIR}"
+        )
+        target_link_libraries(core_downloader_tests PRIVATE "${WINHTTP_LIBRARY}")
         if(MSVC)
             target_compile_options(core_downloader_tests PRIVATE /W4 /permissive- /EHsc)
         else()

@@ -16,6 +16,7 @@ struct Settings final {
     std::string shaderPreset = "none";
     bool vsync = true;
     bool fullscreen = false;
+    bool showFpsCounter = false;
     std::string audioDriver = "wasapi";
     float audioGain = 1.0F;
     std::array<std::string, 2> gamepadGuids{};

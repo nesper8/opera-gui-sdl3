@@ -14,6 +14,7 @@
 #include <chrono>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -204,6 +205,7 @@ void Application::initialize() {
 
 void Application::handleEvent(const SDL_Event& event) {
     ImGui_ImplSDL3_ProcessEvent(&event);
+    const bool bindingWasActive = m_captureBinding.has_value();
     if (m_captureBinding && event.type == SDL_EVENT_KEY_DOWN &&
         event.key.scancode == SDL_SCANCODE_ESCAPE) {
         m_captureBinding.reset();
@@ -243,14 +245,22 @@ void Application::handleEvent(const SDL_Event& event) {
         } catch (const std::exception& error) {
             setError(error.what());
         }
-    } else if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_F2 && !event.key.repeat) {
+    } else if (!bindingWasActive && event.type == SDL_EVENT_KEY_DOWN &&
+               event.key.key == SDLK_F2 && !event.key.repeat) {
         m_uiVisible = !m_uiVisible;
         m_captureBinding.reset();
-    } else if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_F11 && !event.key.repeat) {
+    } else if (!bindingWasActive && event.type == SDL_EVENT_KEY_DOWN &&
+               event.key.key == SDLK_F3 && !event.key.repeat) {
+        m_settings.showFpsCounter = !m_settings.showFpsCounter;
+        saveSettings();
+        m_status = m_settings.showFpsCounter ? "FPS counter enabled." : "FPS counter disabled.";
+    } else if (!bindingWasActive && event.type == SDL_EVENT_KEY_DOWN &&
+               event.key.key == SDLK_F11 && !event.key.repeat) {
         m_settings.fullscreen = !m_settings.fullscreen;
         if (!SDL_SetWindowFullscreen(m_window, m_settings.fullscreen)) setError(SDL_GetError());
         saveSettings();
-    } else if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_F1 && !event.key.repeat) {
+    } else if (!bindingWasActive && event.type == SDL_EVENT_KEY_DOWN &&
+               event.key.key == SDLK_F1 && !event.key.repeat) {
         if (m_core) m_core->reset();
     }
 }
@@ -291,6 +301,10 @@ void Application::drawInterface() {
         }
         if (ImGui::BeginTabItem("Audio")) {
             drawAudioSettings();
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Performance")) {
+            drawPerformanceSettings();
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("Core")) {
@@ -462,6 +476,14 @@ void Application::drawAudioSettings() {
     ImGui::TextWrapped("WASAPI is the default output. SDL converts the Opera core's stereo PCM stream to the selected device.");
 }
 
+void Application::drawPerformanceSettings() {
+    if (ImGui::Checkbox("Show FPS counter (F3)", &m_settings.showFpsCounter)) {
+        saveSettings();
+    }
+    ImGui::TextWrapped("The counter reports the frontend's rendered frames per second.");
+    ImGui::TextUnformatted("F3 toggles the counter at any time.");
+}
+
 void Application::drawCoreSettings() {
     const std::string systemDirectory = pathToUtf8(m_systemDirectory);
     const std::string saveDirectory = pathToUtf8(m_saveDirectory);
@@ -496,14 +518,49 @@ void Application::drawCoreSettings() {
 }
 
 void Application::render() {
+    const auto now = std::chrono::steady_clock::now();
+    ++m_fpsFrameCount;
+    if (m_fpsLastUpdate == std::chrono::steady_clock::time_point{}) {
+        m_fpsLastUpdate = now;
+    } else {
+        const std::chrono::duration<double> elapsed = now - m_fpsLastUpdate;
+        if (elapsed.count() >= 0.5) {
+            m_fpsValue = static_cast<double>(m_fpsFrameCount) / elapsed.count();
+            m_fpsFrameCount = 0;
+            m_fpsLastUpdate = now;
+        }
+    }
+    if (m_uiVisible) m_menuHintStart = {};
+    else if (m_menuHintStart == std::chrono::steady_clock::time_point{}) m_menuHintStart = now;
+
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
     if (m_uiVisible) {
         drawInterface();
     } else {
-        ImGui::GetForegroundDrawList()->AddText(ImVec2(12, 12), IM_COL32(220, 220, 220, 180),
-                                                "F2: Show menu");
+        const float hiddenSeconds = std::chrono::duration<float>(now - m_menuHintStart).count();
+        constexpr float fadeStartSeconds = 5.0F;
+        constexpr float fadeDurationSeconds = 1.0F;
+        if (hiddenSeconds < fadeStartSeconds + fadeDurationSeconds) {
+            const float alpha = hiddenSeconds <= fadeStartSeconds ? 1.0F :
+                1.0F - (hiddenSeconds - fadeStartSeconds) / fadeDurationSeconds;
+            ImGui::GetForegroundDrawList()->AddText(ImVec2(12, 12),
+                IM_COL32(220, 220, 220, static_cast<int>(180.0F * alpha)), "F2: Show menu");
+        }
+    }
+    if (m_settings.showFpsCounter) {
+        char fpsText[32]{};
+        std::snprintf(fpsText, sizeof(fpsText), "FPS: %.1f", m_fpsValue);
+        const ImVec2 textSize = ImGui::CalcTextSize(fpsText);
+        const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+        const ImVec2 position(displaySize.x - textSize.x - 24.0F, 12.0F);
+        ImDrawList* drawList = ImGui::GetForegroundDrawList();
+        drawList->AddRectFilled(ImVec2(position.x - 6.0F, position.y - 4.0F),
+                                ImVec2(position.x + textSize.x + 6.0F,
+                                       position.y + textSize.y + 4.0F),
+                                IM_COL32(0, 0, 0, 150), 4.0F);
+        drawList->AddText(position, IM_COL32(235, 235, 235, 230), fpsText);
     }
     ImGui::Render();
 

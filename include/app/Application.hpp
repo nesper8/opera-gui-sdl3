@@ -9,6 +9,7 @@
 #include <SDL3/SDL.h>
 
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <future>
@@ -55,6 +56,7 @@ private:
     void drawInputSettings();
     void drawVideoSettings();
     void drawAudioSettings();
+    void drawPerformanceSettings();
     void drawCoreSettings();
     void render();
     void openGameDialog();
@@ -86,6 +88,10 @@ private:
     bool m_sdlInitialized{};
     bool m_vsyncActive{};
     bool m_uiVisible{true};
+    std::chrono::steady_clock::time_point m_menuHintStart{};
+    std::chrono::steady_clock::time_point m_fpsLastUpdate{};
+    std::size_t m_fpsFrameCount{};
+    double m_fpsValue{};
     bool m_imguiContext{};
     bool m_imguiPlatformInitialized{};
     bool m_imguiRendererInitialized{};

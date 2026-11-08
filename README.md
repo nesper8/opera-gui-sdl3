@@ -87,9 +87,61 @@ existing tag from the Actions tab.
 
 ## Layout
 
-- `src/LibretroCore.cpp`: libretro DLL lifecycle, callbacks, core options.
-- `src/InputManager.cpp`: SDL gamepad discovery and two-player input routing.
-- `src/AudioOutput.cpp`: SDL audio stream setup and PCM submission.
-- `src/CoreDownloader.cpp`: HTTPS download, staged extraction, and installation.
-- `src/Application.cpp`: SDL event loop, rendering, dialogs, and ImGui settings.
-- `src/Settings.cpp`: validated INI settings persistence.
+```text
+.
+├── .github/
+│   └── workflows/
+│       └── release.yml
+├── include/
+│   └── app/
+│       ├── application/
+│       │   └── Application.hpp
+│       ├── audio/
+│       │   └── AudioOutput.hpp
+│       ├── core/
+│       │   ├── CoreDownloader.hpp
+│       │   ├── LibretroAbi.hpp
+│       │   └── LibretroCore.hpp
+│       ├── input/
+│       │   └── InputManager.hpp
+│       ├── logging/
+│       │   └── Logger.hpp
+│       ├── platform/
+│       │   ├── FrontendRuntime.hpp
+│       │   └── WindowsGpuPreference.hpp
+│       ├── session/
+│       │   └── GameSession.hpp
+│       └── settings/
+│           ├── Settings.hpp
+│           └── SettingsWidgets.hpp
+├── src/
+│   ├── application/
+│   │   ├── Application.cpp
+│   │   ├── ApplicationCore.cpp
+│   │   └── ApplicationRendering.cpp
+│   ├── audio/
+│   │   └── AudioOutput.cpp
+│   ├── core/
+│   │   ├── CoreDownloader.cpp
+│   │   └── LibretroCore.cpp
+│   ├── input/
+│   │   └── InputManager.cpp
+│   ├── logging/
+│   │   └── Logger.cpp
+│   ├── platform/
+│   │   ├── FrontendRuntime.cpp
+│   │   └── WindowsGpuPreference.cpp
+│   ├── session/
+│   │   └── GameSession.cpp
+│   ├── settings/
+│   │   ├── ApplicationAudioSettings.cpp
+│   │   ├── ApplicationCoreSettings.cpp
+│   │   ├── ApplicationInputSettings.cpp
+│   │   ├── ApplicationSettings.cpp
+│   │   ├── ApplicationVideoSettings.cpp
+│   │   └── Settings.cpp
+│   └── main.cpp
+└── tests/
+    ├── CoreDownloaderTests.cpp
+    └── SettingsTests.cpp
+```

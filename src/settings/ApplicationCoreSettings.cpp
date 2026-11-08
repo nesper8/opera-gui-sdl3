@@ -14,6 +14,7 @@ void Application::drawPerformanceSettings() {
         saveSettings();
         if (m_error.empty()) m_status = "Performance settings reverted to defaults.";
     }
+    drawSaveSettingsButton();
     if (ImGui::Checkbox("Show FPS counter (F3)", &m_settings.showFpsCounter)) {
         saveSettings();
     }
@@ -57,6 +58,7 @@ void Application::drawCoreSettings() {
             setError(std::string("Unable to revert Opera core options: ") + error.what());
         }
     }
+    drawSaveSettingsButton();
     ImGui::SameLine();
     ImGui::TextDisabled("Resets Opera core options only.");
     for (const auto& option : m_session.core()->options()) {

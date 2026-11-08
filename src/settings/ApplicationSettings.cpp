@@ -68,4 +68,12 @@ void Application::drawInterface() {
     ImGui::End();
 }
 
+void Application::drawSaveSettingsButton() {
+    ImGui::SameLine();
+    if (ImGui::Button("Save settings")) {
+        saveSettings();
+        if (m_error.empty()) m_status = "Settings saved.";
+    }
+}
+
 } // namespace app

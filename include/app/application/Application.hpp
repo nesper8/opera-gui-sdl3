@@ -61,6 +61,7 @@ private:
     void drawAudioSettings();
     void drawPerformanceSettings();
     void drawCoreSettings();
+    void drawSaveSettingsButton();
     void render();
     void openGameDialog();
     void loadGame(const std::filesystem::path& path);

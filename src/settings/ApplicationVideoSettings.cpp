@@ -80,6 +80,7 @@ void Application::drawVideoSettings() {
             setError(std::string("Unable to revert video settings: ") + error.what());
         }
     }
+    drawSaveSettingsButton();
     ImGui::SameLine();
     ImGui::TextDisabled("Video settings only.");
 

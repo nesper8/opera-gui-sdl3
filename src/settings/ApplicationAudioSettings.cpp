@@ -37,6 +37,7 @@ void Application::drawAudioSettings() {
             setError(std::string("Unable to revert audio settings: ") + error.what());
         }
     }
+    drawSaveSettingsButton();
     ImGui::SameLine();
     ImGui::TextDisabled("Audio settings only.");
 

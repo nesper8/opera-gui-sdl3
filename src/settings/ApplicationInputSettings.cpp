@@ -41,6 +41,7 @@ void Application::drawInputSettings() {
             setError(std::string("Unable to reset input settings: ") + error.what());
         }
     }
+    drawSaveSettingsButton();
 
     if (ImGui::BeginCombo("Player", playerName(m_selectedPlayer))) {
         for (std::size_t player = 0; player < 2; ++player) {

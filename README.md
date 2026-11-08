@@ -11,7 +11,8 @@ not launch RetroArch.
 - Loads the DLL through the libretro API and exposes version-1 core options
   with legacy option fallback in the settings window, with a control to restore
   the Opera core's option defaults.
-- Provides a section-specific revert-to-defaults control on each settings tab.
+- Provides a section-specific revert-to-defaults control and a Save settings
+  button on each settings tab.
 - Opens ISO, BIN/CUE, and CHD disc images using SDL's native file dialog.
 - Routes the two emulated joypads independently to an SDL gamepad (including
   XInput controllers) or remappable keyboard controls. Bindings are captured

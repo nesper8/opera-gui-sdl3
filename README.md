@@ -78,6 +78,13 @@ Core tab shows the system and save directories. BIN/CUE sets should be opened
 through their `.cue` file.
 Changing the video or audio backend requires restarting the application.
 
+## Releases
+
+Pushing a version tag such as `v0.1.0` builds and tests the Windows x64 frontend,
+packages `opera_frontend.exe`, `SDL3.dll`, and this README into a ZIP, and
+publishes it as a GitHub release. The same workflow can be run manually for an
+existing tag from the Actions tab.
+
 ## Layout
 
 - `src/LibretroCore.cpp`: libretro DLL lifecycle, callbacks, core options.

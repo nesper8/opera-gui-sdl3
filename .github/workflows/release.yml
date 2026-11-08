@@ -1,0 +1,59 @@
+name: Build and release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and publish
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Configure
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        run: cmake --build build --config Release --target opera_frontend settings_tests --parallel
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $packageDirectory = Join-Path $PWD "package"
+          New-Item -ItemType Directory -Force -Path $packageDirectory | Out-Null
+          Copy-Item "build/Release/opera_frontend.exe" $packageDirectory
+          Copy-Item "build/Release/SDL3.dll" $packageDirectory
+          Copy-Item "README.md" $packageDirectory
+
+          $archive = "OperaSDL3Frontend-$env:RELEASE_TAG-windows-x64.zip"
+          Compress-Archive -Path (Join-Path $packageDirectory "*") -DestinationPath $archive -Force
+          if (-not (Test-Path $archive)) {
+            throw "Release archive was not created: $archive"
+          }
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: OperaSDL3Frontend-${{ env.RELEASE_TAG }}-windows-x64.zip

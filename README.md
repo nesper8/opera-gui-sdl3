@@ -29,7 +29,7 @@ not launch RetroArch.
 - Shows the hidden-menu hint for five seconds before fading it out, and provides
   an optional rendered-FPS counter that can be enabled in the Performance tab
   or toggled at any time with F3.
-- Selects SDL's OpenGL, Vulkan, or Direct3D 12 renderer, nearest/linear scaling, VSync,
+- Selects SDL's OpenGL, Vulkan, Direct3D 11, or Direct3D 12 renderer, nearest/linear scaling, VSync,
   user-selectable borderless windowed or exclusive fullscreen, and a built-in
   CRT scanline presentation preset. F11 toggles between windowed and the
   selected fullscreen mode. On Windows,

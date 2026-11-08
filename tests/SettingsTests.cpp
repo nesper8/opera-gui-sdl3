@@ -92,6 +92,13 @@ void testDefaultsAndRoundTrip() {
 
         {
             std::ofstream output(file, std::ios::trunc);
+            output << "[video]\ndriver=direct3d11\n";
+        }
+        const app::Settings direct3d11 = app::Settings::load(file);
+        require(direct3d11.videoDriver == "direct3d11", "Direct3D 11 renderer setting did not load.");
+
+        {
+            std::ofstream output(file, std::ios::trunc);
             output << "[input]\nplayer1_pad_4=-101\nplayer1_key_4=82,81\n";
         }
         const app::Settings migrated = app::Settings::load(file);

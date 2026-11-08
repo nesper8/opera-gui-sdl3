@@ -19,6 +19,7 @@ jobs:
     runs-on: windows-latest
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
+      SCCACHE_GHA_ENABLED: "true"
 
     steps:
       - name: Check out release source
@@ -82,11 +83,18 @@ jobs:
         with:
           arch: x64
 
+      - name: Restore or save compiler cache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
       - name: Build
         run: cmake --build build --target opera_frontend settings_tests --parallel
+
+      - name: Show compiler cache statistics
+        shell: bash
+        run: ${SCCACHE_PATH} --show-stats
 
       - name: Test
         run: ctest --test-dir build --output-on-failure

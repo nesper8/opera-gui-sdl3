@@ -47,6 +47,11 @@ std::string pathToUtf8(const std::filesystem::path& path) {
     return result;
 }
 
+bool setBorderlessFullscreen(SDL_Window* window, const bool fullscreen) {
+    return SDL_SetWindowFullscreenMode(window, nullptr) &&
+        SDL_SetWindowFullscreen(window, fullscreen);
+}
+
 bool selectableCombo(const char* label, std::string& value,
                      const std::vector<std::pair<const char*, const char*>>& choices) {
     bool changed = false;
@@ -210,7 +215,7 @@ void Application::initialize() {
         m_settings.vsync = false;
         Logger::write(LogLevel::Warning, std::string("VSync could not be configured: ") + SDL_GetError());
     }
-    if (m_settings.fullscreen && !SDL_SetWindowFullscreen(m_window, true)) {
+    if (m_settings.fullscreen && !setBorderlessFullscreen(m_window, true)) {
         Logger::write(LogLevel::Warning, std::string("Fullscreen could not be enabled: ") + SDL_GetError());
     }
 
@@ -305,7 +310,7 @@ void Application::handleEvent(const SDL_Event& event) {
     } else if (!bindingWasActive && event.type == SDL_EVENT_KEY_DOWN &&
                event.key.key == SDLK_F11 && !event.key.repeat) {
         m_settings.fullscreen = !m_settings.fullscreen;
-        if (!SDL_SetWindowFullscreen(m_window, m_settings.fullscreen)) setError(SDL_GetError());
+        if (!setBorderlessFullscreen(m_window, m_settings.fullscreen)) setError(SDL_GetError());
         saveSettings();
     } else if (!bindingWasActive && event.type == SDL_EVENT_KEY_DOWN &&
                event.key.key == SDLK_F1 && !event.key.repeat) {
@@ -597,7 +602,7 @@ void Application::drawVideoSettings() {
             m_settings.shaderPreset = defaults.shaderPreset;
             m_settings.vsync = defaults.vsync;
             m_settings.fullscreen = defaults.fullscreen;
-            if (!SDL_SetWindowFullscreen(m_window, m_settings.fullscreen)) {
+            if (!setBorderlessFullscreen(m_window, m_settings.fullscreen)) {
                 throw std::runtime_error(std::string("Unable to restore window mode: ") + SDL_GetError());
             }
             if (m_frameTexture) {
@@ -627,7 +632,7 @@ void Application::drawVideoSettings() {
                         restoreError.what());
                 }
             }
-            if (!SDL_SetWindowFullscreen(m_window, previousSettings.fullscreen)) {
+            if (!setBorderlessFullscreen(m_window, previousSettings.fullscreen)) {
                 Logger::write(LogLevel::Error,
                     std::string("Unable to restore the previous window mode: ") + SDL_GetError());
             }
@@ -708,7 +713,7 @@ void Application::drawVideoSettings() {
     }
 
     if (ImGui::Checkbox("Fullscreen (F11)", &m_settings.fullscreen)) {
-        if (!SDL_SetWindowFullscreen(m_window, m_settings.fullscreen)) setError(SDL_GetError());
+        if (!setBorderlessFullscreen(m_window, m_settings.fullscreen)) setError(SDL_GetError());
         changed = true;
     }
     if (changed) {

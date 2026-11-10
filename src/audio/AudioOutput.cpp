@@ -21,8 +21,8 @@ void AudioOutput::configure(const double sampleRate) {
     if (!std::isfinite(sampleRate) || sampleRate < 8000.0 || sampleRate > 192000.0) {
         throw std::runtime_error("The Opera core reported an unsupported audio sample rate.");
     }
-    const int deviceFrames = static_cast<int>(std::lround(
-        sampleRate * static_cast<double>(m_settings.audioLatencyMs) / 1000.0));
+    constexpr double deviceBufferMs = 10.0;
+    const int deviceFrames = static_cast<int>(std::lround(sampleRate * deviceBufferMs / 1000.0));
     const std::string deviceFramesHint = std::to_string(std::max(deviceFrames, 1));
     if (!SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, deviceFramesHint.c_str())) {
         Logger::write(LogLevel::Warning, "SDL rejected the requested audio device buffer size.");
@@ -46,7 +46,8 @@ void AudioOutput::configure(const double sampleRate) {
 
     SDL_AudioStream* newStream = SDL_OpenAudioDeviceStream(deviceId, &spec, nullptr, nullptr);
     if (!newStream) throw std::runtime_error(std::string("Unable to open SDL audio output: ") + SDL_GetError());
-    if (!SDL_SetAudioStreamGain(newStream, std::clamp(m_settings.audioGain, 0.0F, 1.0F))) {
+    const float gain = m_settings.audioMuted ? 0.0F : std::clamp(m_settings.audioGain, 0.0F, 1.0F);
+    if (!SDL_SetAudioStreamGain(newStream, gain)) {
         const std::string error = SDL_GetError();
         SDL_DestroyAudioStream(newStream);
         throw std::runtime_error("Unable to configure SDL audio output: " + error);
@@ -58,6 +59,8 @@ void AudioOutput::configure(const double sampleRate) {
     }
     if (m_stream) SDL_DestroyAudioStream(m_stream);
     m_stream = newStream;
+    m_sampleRate = spec.freq;
+    m_queueQueryFailed = false;
 }
 
 std::vector<AudioDeviceInfo> AudioOutput::playbackDevices() {
@@ -100,9 +103,33 @@ void AudioOutput::discardQueuedAudio() noexcept {
 }
 
 void AudioOutput::setGain(const float gain) noexcept {
-    if (m_stream && !SDL_SetAudioStreamGain(m_stream, std::clamp(gain, 0.0F, 1.0F))) {
+    const float effectiveGain = m_settings.audioMuted ? 0.0F : std::clamp(gain, 0.0F, 1.0F);
+    if (m_stream && !SDL_SetAudioStreamGain(m_stream, effectiveGain)) {
         Logger::write(LogLevel::Error, std::string("Unable to set audio gain: ") + SDL_GetError());
     }
+}
+
+void AudioOutput::setMuted(const bool muted) noexcept {
+    const float effectiveGain = muted ? 0.0F : std::clamp(m_settings.audioGain, 0.0F, 1.0F);
+    if (m_stream && !SDL_SetAudioStreamGain(m_stream, effectiveGain)) {
+        Logger::write(LogLevel::Error, std::string("Unable to set audio mute state: ") + SDL_GetError());
+    }
+}
+
+std::optional<double> AudioOutput::queuedMilliseconds() noexcept {
+    if (!m_stream || m_sampleRate <= 0) return 0.0;
+    const int queuedBytes = SDL_GetAudioStreamQueued(m_stream);
+    if (queuedBytes < 0) {
+        if (!m_queueQueryFailed) {
+            Logger::write(LogLevel::Error, std::string("Unable to query queued audio: ") + SDL_GetError());
+            m_queueQueryFailed = true;
+        }
+        return std::nullopt;
+    }
+    m_queueQueryFailed = false;
+    constexpr double bytesPerFrame = 2.0 * sizeof(std::int16_t);
+    return static_cast<double>(queuedBytes) * 1000.0 /
+           (bytesPerFrame * static_cast<double>(m_sampleRate));
 }
 
 } // namespace app

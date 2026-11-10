@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -28,11 +29,15 @@ public:
     void submit(const std::int16_t* samples, std::size_t frames) noexcept;
     void discardQueuedAudio() noexcept;
     void setGain(float gain) noexcept;
+    void setMuted(bool muted) noexcept;
+    std::optional<double> queuedMilliseconds() noexcept;
     static std::vector<AudioDeviceInfo> playbackDevices();
 
 private:
     const Settings& m_settings;
     SDL_AudioStream* m_stream{};
+    int m_sampleRate{};
+    bool m_queueQueryFailed{};
 };
 
 } // namespace app

@@ -39,17 +39,21 @@ not launch RetroArch.
 - Exposes the Opera core's 640x480 high-resolution framebuffer option in Video
   settings when supported by the loaded core.
 - Uses SDL audio with the SDL default backend selected by default, optional
-  WASAPI selection, selectable output device, 40 ms default audio latency
-  (configurable in settings), and
-  adjustable output gain. Playback stays at the core's native rate, and gain
-  is capped at unity to avoid frontend-induced clipping. Audio latency is a
-  requested SDL buffer size; the audio backend may choose a different effective value.
+  WASAPI selection, selectable output device, configurable audio queue target,
+  adjustable output gain, and mute. Audio sync can pace emulation against the
+  queued audio to limit catch-up bursts and latency growth. Playback stays at
+  the core's native rate, and gain is capped at unity to avoid frontend-induced
+  clipping; the output device adds buffering beyond the queue target.
 - Detects supported 3DO BIOS filenames in the application's `bios` directory
   and uses that directory as the core system directory when enabled. Detection
   is optional; the frontend launches without proprietary BIOS files and uses
   the existing user system directory automatically when no BIOS is found.
-- Persists settings under the current user's SDL preferences directory and
-  records diagnostics in `opera-frontend.log`.
+- Stores settings, emulator save files, system data, UI state, and logs in the
+  `portable_data` directory beside the executable. On first launch after this
+  update, existing SDL preferences are copied there without replacing files
+  already present. The `cores` and optional `bios` directories are beside the
+  executable as well, so the complete application folder can be moved or
+  backed up as a portable installation.
 
 The initial CRT preset is a scanline overlay, not a programmable shader chain;
 loading arbitrary RetroArch `.glsl`, `.slang`, or `.preset` shaders is not yet

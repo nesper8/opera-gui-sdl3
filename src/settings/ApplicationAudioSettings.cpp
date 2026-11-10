@@ -15,15 +15,20 @@ void Application::drawAudioSettings() {
         const std::string previousDevice = m_settings.audioDevice;
         const int previousLatency = m_settings.audioLatencyMs;
         const float previousGain = m_settings.audioGain;
+        const bool previousMuted = m_settings.audioMuted;
+        const bool previousSync = m_settings.audioSync;
         m_settings.audioDriver = defaults.audioDriver;
         m_settings.audioDevice = defaults.audioDevice;
         m_settings.audioLatencyMs = defaults.audioLatencyMs;
         m_settings.audioGain = defaults.audioGain;
+        m_settings.audioMuted = defaults.audioMuted;
+        m_settings.audioSync = defaults.audioSync;
         try {
             if (m_session.core() && m_session.core()->gameLoaded()) {
                 m_session.audio()->configure(m_session.core()->sampleRate());
             } else {
                 m_session.audio()->setGain(m_settings.audioGain);
+                m_session.audio()->setMuted(m_settings.audioMuted);
             }
             saveSettings();
             if (m_error.empty()) {
@@ -34,6 +39,8 @@ void Application::drawAudioSettings() {
             m_settings.audioDevice = previousDevice;
             m_settings.audioLatencyMs = previousLatency;
             m_settings.audioGain = previousGain;
+            m_settings.audioMuted = previousMuted;
+            m_settings.audioSync = previousSync;
             setError(std::string("Unable to revert audio settings: ") + error.what());
         }
     }
@@ -67,7 +74,7 @@ void Application::drawAudioSettings() {
 
     const int previousLatency = m_settings.audioLatencyMs;
     const bool latencyChanged = ImGui::SliderInt(
-        "Audio latency (ms)", &m_settings.audioLatencyMs, 16, 200);
+        "Audio queue target (ms)", &m_settings.audioLatencyMs, 16, 200);
     if (latencyChanged) {
         ImGui::SameLine();
         ImGui::TextDisabled("(lower latency, higher stutter risk)");
@@ -77,9 +84,16 @@ void Application::drawAudioSettings() {
         if (m_session.audio()) m_session.audio()->setGain(m_settings.audioGain);
         saveSettings();
     }
+    if (ImGui::Checkbox("Mute audio", &m_settings.audioMuted)) {
+        if (m_session.audio()) m_session.audio()->setMuted(m_settings.audioMuted);
+        saveSettings();
+    }
+    if (ImGui::Checkbox("Synchronize emulation to audio", &m_settings.audioSync)) {
+        saveSettings();
+    }
 
     if (outputChanged || latencyChanged) {
-        if (m_session.core() && m_session.core()->gameLoaded()) {
+        if (outputChanged && m_session.core() && m_session.core()->gameLoaded()) {
             try {
                 m_session.audio()->configure(m_session.core()->sampleRate());
             } catch (const std::exception& error) {
@@ -89,14 +103,14 @@ void Application::drawAudioSettings() {
             }
         }
         saveSettings();
-        if (m_error.empty()) m_status = "Audio output settings applied.";
+        if (m_error.empty()) m_status = "Audio settings applied.";
     }
     if (driverChanged) {
         saveSettings();
         m_status = "Restart the application to apply the audio driver change.";
     }
-    ImGui::TextWrapped("Playback rate is kept at the core's native speed. Output gain is capped at unity to avoid introducing clipping.");
-    ImGui::TextWrapped("The requested device buffer size is a hint; SDL and the audio driver may choose a different effective latency.");
+    ImGui::TextWrapped("Audio sync limits queued audio to the selected target and pauses catch-up frame bursts when playback is ahead. It is most useful with VSync disabled.");
+    ImGui::TextWrapped("The output device adds its own buffering, so the selected latency is a target rather than a guaranteed end-to-end delay. Output gain is capped at unity.");
 }
 
 } // namespace app

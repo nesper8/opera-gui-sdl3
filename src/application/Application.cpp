@@ -34,6 +34,64 @@ std::filesystem::path pathFromUtf8(const char* value) {
     return std::filesystem::path(std::move(wide));
 }
 
+void migrateLegacyPreferences(const std::filesystem::path& legacyDirectory,
+                             const std::filesystem::path& portableDirectory) {
+    std::error_code error;
+    if (!std::filesystem::exists(legacyDirectory, error)) {
+        if (error) {
+            throw std::filesystem::filesystem_error(
+                "Unable to inspect the previous preferences directory", legacyDirectory, error);
+        }
+        return;
+    }
+
+    std::filesystem::recursive_directory_iterator entry(legacyDirectory, error);
+    if (error) {
+        throw std::filesystem::filesystem_error(
+            "Unable to inspect the previous preferences directory", legacyDirectory, error);
+    }
+    const std::filesystem::recursive_directory_iterator end;
+    while (entry != end) {
+        const bool regularFile = entry->is_regular_file(error);
+        if (error) {
+            throw std::filesystem::filesystem_error(
+                "Unable to inspect previous preference data", entry->path(), error);
+        }
+        if (regularFile) {
+            const auto relativePath = std::filesystem::relative(entry->path(), legacyDirectory, error);
+            if (error) {
+                throw std::filesystem::filesystem_error(
+                    "Unable to resolve previous preference data path", entry->path(), error);
+            }
+            const auto destination = portableDirectory / relativePath;
+            std::filesystem::create_directories(destination.parent_path(), error);
+            if (error) {
+                throw std::filesystem::filesystem_error(
+                    "Unable to create portable data directory", destination.parent_path(), error);
+            }
+            if (!std::filesystem::exists(destination, error)) {
+                if (error) {
+                    throw std::filesystem::filesystem_error(
+                        "Unable to inspect portable data file", destination, error);
+                }
+                std::filesystem::copy_file(entry->path(), destination, error);
+                if (error) {
+                    throw std::filesystem::filesystem_error(
+                        "Unable to migrate previous preference data", entry->path(), destination, error);
+                }
+            } else if (error) {
+                throw std::filesystem::filesystem_error(
+                    "Unable to inspect portable data file", destination, error);
+            }
+        }
+        entry.increment(error);
+        if (error) {
+            throw std::filesystem::filesystem_error(
+                "Unable to inspect the previous preferences directory", legacyDirectory, error);
+        }
+    }
+}
+
 std::optional<std::filesystem::path> detectOperaBios(const std::filesystem::path& directory) {
     static constexpr std::array<const char*, 10> biosFiles{
         "panafz1.bin",
@@ -94,16 +152,36 @@ Application::Application() {
     m_baseDirectory = pathFromUtf8(basePath);
     SDL_free(const_cast<char*>(basePath));
 
-    const char* preferencesPath = SDL_GetPrefPath("Opera", "OperaSDL3Frontend");
-    if (!preferencesPath) throw std::runtime_error(std::string("Unable to locate the settings directory: ") + SDL_GetError());
-    m_preferencesDirectory = pathFromUtf8(preferencesPath);
-    SDL_free(const_cast<char*>(preferencesPath));
+    m_preferencesDirectory = m_baseDirectory / "portable_data";
+    std::error_code error;
+    const bool portableDirectoryExists = std::filesystem::exists(m_preferencesDirectory, error);
+    if (error) {
+        throw std::filesystem::filesystem_error(
+            "Unable to inspect portable data directory", m_preferencesDirectory, error);
+    }
+    if (!portableDirectoryExists) {
+        const char* legacyPath = SDL_GetPrefPath("Opera", "OperaSDL3Frontend");
+        if (!legacyPath) {
+            throw std::runtime_error(
+                std::string("Unable to locate the previous settings directory: ") + SDL_GetError());
+        }
+        std::filesystem::path legacyDirectory;
+        try {
+            legacyDirectory = pathFromUtf8(legacyPath);
+        } catch (...) {
+            SDL_free(const_cast<char*>(legacyPath));
+            throw;
+        }
+        SDL_free(const_cast<char*>(legacyPath));
+        migrateLegacyPreferences(legacyDirectory, m_preferencesDirectory);
+    }
     m_settingsFile = m_preferencesDirectory / "settings.ini";
     m_coreDirectory = m_baseDirectory / "cores";
     m_biosDirectory = m_baseDirectory / "bios";
     m_systemDirectory = m_preferencesDirectory / "system";
     m_saveDirectory = m_preferencesDirectory / "saves";
     m_imguiIniFile = pathToUtf8(m_preferencesDirectory / "imgui.ini");
+    std::filesystem::create_directories(m_preferencesDirectory);
     std::filesystem::create_directories(m_systemDirectory);
     std::filesystem::create_directories(m_biosDirectory);
     std::filesystem::create_directories(m_saveDirectory);
@@ -156,6 +234,7 @@ int Application::run() {
                 setError(error.what());
             }
         }
+        bool audioBackpressure = false;
         if (m_session.core() && m_session.core()->gameLoaded()) {
             const auto frameDuration = std::chrono::duration_cast<Clock::duration>(
                 std::chrono::duration<double>(1.0 / m_session.core()->frameRate()));
@@ -163,6 +242,13 @@ int Application::run() {
             unsigned catchUpFrames = 0;
             auto now = Clock::now();
             while (now >= nextCoreFrame && catchUpFrames < MaxCatchUpFrames) {
+                if (m_settings.audioSync) {
+                    const auto queuedAudioMs = m_session.audio()->queuedMilliseconds();
+                    if (queuedAudioMs && *queuedAudioMs >= static_cast<double>(m_settings.audioLatencyMs)) {
+                        audioBackpressure = true;
+                        break;
+                    }
+                }
                 m_session.core()->run();
                 nextCoreFrame += frameDuration;
                 ++catchUpFrames;
@@ -174,7 +260,11 @@ int Application::run() {
         render();
         updateCursorVisibility();
         if (m_session.core() && m_session.core()->gameLoaded() && !m_runtime.vsyncActive()) {
-            std::this_thread::sleep_until(nextCoreFrame);
+            if (audioBackpressure) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            } else {
+                std::this_thread::sleep_until(nextCoreFrame);
+            }
         } else if ((!m_session.core() || !m_session.core()->gameLoaded()) && !m_runtime.vsyncActive()) {
             SDL_Delay(16);
         }

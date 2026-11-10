@@ -57,6 +57,8 @@ void testDefaultsAndRoundTrip() {
         settings.audioDevice = "Test speakers";
         settings.audioLatencyMs = 120;
         settings.audioGain = 0.75F;
+        settings.audioMuted = true;
+        settings.audioSync = false;
         settings.gamepadGuids[1] = "test-guid#1";
         settings.keyboardBindings[1][app::PadButtonCount - 1] = {77, 78};
         settings.gamepadBindings[1][1] = {2, 3};
@@ -78,6 +80,8 @@ void testDefaultsAndRoundTrip() {
         require(loaded.audioDevice == "Test speakers", "Audio output device did not persist.");
         require(loaded.audioLatencyMs == 120, "Audio latency did not persist.");
         require(loaded.audioGain == 0.75F, "Audio gain did not persist.");
+        require(loaded.audioMuted, "Audio mute setting did not persist.");
+        require(!loaded.audioSync, "Audio sync setting did not persist.");
         require(loaded.gamepadGuids[1] == "test-guid#1", "Gamepad selection did not persist.");
         require(loaded.keyboardBindings[1][app::PadButtonCount - 1] == std::vector<int>{77, 78},
                 "Multiple keyboard mappings did not persist.");
@@ -110,7 +114,7 @@ void testDefaultsAndRoundTrip() {
         {
             std::ofstream output(file, std::ios::trunc);
             output << "[video]\ndriver=unknown\ngpu=unknown\nfullscreen_mode=unknown\n"
-                      "[audio]\ngain=nan\n"
+                      "[audio]\ngain=nan\nmuted=invalid\nsync=invalid\n"
                       "latency_ms=999\n"
                       "[performance]\nfps_counter=invalid\n"
                       "[system]\nuse_detected_bios=invalid\n";
@@ -123,6 +127,8 @@ void testDefaultsAndRoundTrip() {
         require(!sanitized.showFpsCounter, "Invalid FPS counter setting must fall back to disabled.");
         require(sanitized.useDetectedBios, "Invalid BIOS setting must fall back to enabled.");
         require(sanitized.audioGain == 1.0F, "Non-finite gain must fall back to its default.");
+        require(!sanitized.audioMuted, "Invalid mute setting must fall back to unmuted.");
+        require(sanitized.audioSync, "Invalid audio sync setting must fall back to enabled.");
         require(sanitized.audioLatencyMs == 200, "Audio latency must be clamped to the supported range.");
         {
             std::ofstream output(file, std::ios::trunc);

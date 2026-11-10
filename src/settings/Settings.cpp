@@ -129,6 +129,8 @@ Settings Settings::load(const std::filesystem::path& file) {
             else if (key == "latency_ms") {
                 result.audioLatencyMs = std::clamp(parseInteger(value, result.audioLatencyMs), 16, 200);
             } else if (key == "gain") result.audioGain = std::clamp(parseGain(value, result.audioGain), 0.0F, 1.0F);
+            else if (key == "muted") result.audioMuted = parseBool(value, result.audioMuted);
+            else if (key == "sync") result.audioSync = parseBool(value, result.audioSync);
         } else if (section == "performance") {
             if (key == "fps_counter") result.showFpsCounter = parseBool(value, result.showFpsCounter);
         } else if (section == "system") {
@@ -181,7 +183,9 @@ void Settings::save(const std::filesystem::path& file) const {
                << "driver=" << audioDriver << '\n'
                << "device=" << audioDevice << '\n'
                << "latency_ms=" << audioLatencyMs << '\n'
-               << "gain=" << audioGain << "\n\n"
+               << "gain=" << audioGain << '\n'
+               << "muted=" << (audioMuted ? "true" : "false") << '\n'
+               << "sync=" << (audioSync ? "true" : "false") << "\n\n"
                << "[performance]\n"
                << "fps_counter=" << (showFpsCounter ? "true" : "false") << "\n\n"
                << "[system]\n"

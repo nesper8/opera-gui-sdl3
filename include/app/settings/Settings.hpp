@@ -24,6 +24,8 @@ struct Settings final {
     std::string audioDevice;
     int audioLatencyMs = 40;
     float audioGain = 1.0F;
+    bool audioMuted = false;
+    bool audioSync = true;
     std::array<std::string, 2> gamepadGuids{};
     std::array<std::array<std::vector<int>, PadButtonCount>, 2> keyboardBindings{};
     std::array<std::array<std::vector<int>, PadButtonCount>, 2> gamepadBindings{};
